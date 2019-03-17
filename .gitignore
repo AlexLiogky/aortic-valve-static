@@ -1,0 +1,60 @@
+#CodeBlocks
+Aortic-Valve.*
+!Aortic-Valve.cbp
+bin
+obj
+
+#Data and results resources
+data
+results
+
+#Unprepared files
+src/debugger
+src/additional
+
+# Prerequisites
+*.d
+
+# Object files
+*.slo
+*.lo
+*.o
+*.ko
+*.obj
+*.elf
+
+# Linker output
+*.ilk
+*.map
+*.exp
+
+# Precompiled Headers
+*.gch
+*.pch
+
+# Libraries
+*.lib
+*.a
+*.la
+*.lo
+*.lai
+
+# Shared objects (inc. Windows DLLs)
+*.dll
+*.so
+*.so.*
+*.dylib
+
+# Executables
+*.exe
+*.out
+*.app
+*.i*86
+*.x86_64
+*.hex
+
+# Debug files
+*.dSYM/
+*.su
+*.idb
+*.pdb
