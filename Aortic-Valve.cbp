@@ -32,9 +32,20 @@
 		<Compiler>
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
+			<Add directory="usr/include" />
 		</Compiler>
+		<Linker>
+			<Add library="SDL" />
+			<Add library="GL" />
+			<Add library="GLU" />
+			<Add library="SDL_image" />
+			<Add directory="usr/lib" />
+		</Linker>
 		<Unit filename="include/ani_lin_stress.h" />
 		<Unit filename="include/bound-box.h" />
+		<Unit filename="include/camera.h">
+			<Option target="&lt;{~None~}&gt;" />
+		</Unit>
 		<Unit filename="include/computation.h" />
 		<Unit filename="include/data.h" />
 		<Unit filename="include/elem.h" />
@@ -57,6 +68,10 @@
 		</Unit>
 		<Unit filename="src/bound-box.c">
 			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="src/camera.c">
+			<Option compilerVar="CC" />
+			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
 		<Unit filename="src/computation.c">
 			<Option compilerVar="CC" />

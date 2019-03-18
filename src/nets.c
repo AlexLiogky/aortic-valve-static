@@ -19,7 +19,7 @@ int net_is_static(net_t net){
 }
 
 void net_t_set_state(net_t* net, int state){
-	net[0].state = state;	
+	net[0].state = state;
 }
 
 nets_t nets_t_get_net(int count){
@@ -41,6 +41,10 @@ void nets_t_destruct(nets_t nets){
 	free(nets.nets);
 }
 
+void nets_t_surfacial_free(nets_t nets){
+    free(nets.nets);
+}
+
 void nets_t_dump(nets_t nets){
 	printf("nets {\n");
 	printf("count of nets = %d ", nets.count);
@@ -50,7 +54,7 @@ void nets_t_dump(nets_t nets){
 
 void net_t_set_node_shared_elems(net_t* net){
 	int cnt = (*net).vrtx.count, i;
-	
+
 	int e_cnt = (*net).elems.count, j;
 	unsigned int* elem_cnt = (unsigned int*) calloc(cnt, sizeof(int));
 	for (i = 0; i < cnt; i++)
@@ -59,7 +63,7 @@ void net_t_set_node_shared_elems(net_t* net){
 			node_t* chk = (*net).vrtx.nodes[i];
 			if (vrts[0] == chk || vrts[1] == chk || vrts[2] == chk)
 				elem_cnt[i]++;
-			}	
+			}
 	for (i = 0; i < cnt; i++){
 		unsigned int* elem_id = (unsigned int*) calloc(elem_cnt[i], sizeof(int));
 		node_t* chk = (*net).vrtx.nodes[i];
@@ -116,7 +120,7 @@ void net_t_set_node_shared_springs(net_t* net){
 			if(ends[0] == chk || ends[1] == chk)
 				spr_cnt[i]++;
 			}
-		
+
 	for (i = 0; i < cnt; i++){
 		unsigned int* spring_id = (unsigned int*) calloc(spr_cnt[i], sizeof(int));
 		int k = 0;
@@ -138,7 +142,7 @@ void update_net(net_t net){
 }
 
 void init_net(net_t* net){
-	net_t_set_node_shared_elems(net);	
+	net_t_set_node_shared_elems(net);
 	net_t_set_node_shared_springs(net);
 	update_net(*net);
 }
@@ -156,7 +160,7 @@ void update_nets(nets_t nets){
 }
 
 point_t node_to_elem_projection(node_t* node, elem_t* elem, double* sqr_distance){
-	return point_to_elem_projection(node[0].coord, elem, sqr_distance); 
+	return point_to_elem_projection(node[0].coord, elem, sqr_distance);
 }
 
 point_t point_to_net_projection(point_t point, net_t net, double* sqr_distance){
@@ -177,7 +181,7 @@ point_t point_to_net_projection(point_t point, net_t net, double* sqr_distance){
 }
 
 point_t node_to_net_projection(node_t* node, net_t net, double* sqr_distance){
-	return point_to_net_projection(node[0].coord, net, sqr_distance); 
+	return point_to_net_projection(node[0].coord, net, sqr_distance);
 }
 
 void nets_t_construct_nodes_contact(nets_t nets){
@@ -219,7 +223,7 @@ char* serialize_net(net_t net, char* buffer){
 	buffer = serialize_springs(net.springs, buffer);
 	memcpy(buffer, &net.state, sizeof(int));
 	buffer += sizeof(int);
-		
+
 	return buffer;
 }
 
@@ -233,7 +237,7 @@ char* serialize_nets(nets_t nets, int* fullsize){
 	buffer += sizeof(unsigned int);
 	for (unsigned int i = 0; i < cnt; i++)
 		buffer = serialize_net(nets.nets[i], buffer);
-	
+
 	return buf;
 }
 
@@ -248,7 +252,7 @@ net_t deserialize_net(char* buffer, int* offset){
 	DOWNLOAD_DATA(int, state);
 	net_t net = net_t_get(vrtx, elems, sprs);
 	net_t_set_state(&net, state);
-	
+
 	return net;
 }
 
@@ -260,9 +264,9 @@ nets_t deserialize_nets(char* buffer){
 	nets_t nets = nets_t_get_net(count_nets);
 	for (unsigned int i = 0; i < count_nets; i++)
 		nets.nets[i] = deserialize_net(buffer, &offset);
-	
+
 	nets_t_construct_nodes_contact(nets);
-	
+
 	return nets;
 }
 

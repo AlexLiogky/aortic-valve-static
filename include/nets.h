@@ -1,5 +1,5 @@
 #ifndef _NETS_
-#define _NETS_ 
+#define _NETS_
 
 #include "point.h"
 #include "node.h"
@@ -10,9 +10,9 @@ typedef struct net_t{
 	vrtx_t vrtx;
 	elems_t elems;
 	springs_t springs;
-	int state;		
+	int state;
 }net_t;
-	
+
 typedef struct nets_t{
 	net_t* nets;
 	unsigned int count;
@@ -40,7 +40,10 @@ nets_t nets_t_get_net(int count);
 void net_t_destruct(net_t net); //destructor
 
 //container destructor, delete content too
-void nets_t_destruct(nets_t nets); 
+void nets_t_destruct(nets_t nets);
+
+//container destructor, doesn't change content
+void nets_t_surfacial_free(nets_t nets);
 
 //debug print of nets container
 void nets_t_dump(nets_t nets);
@@ -60,7 +63,7 @@ void net_t_set_springs(net_t* net);
 //set shared springs to all nodes in net
 void net_t_set_node_shared_springs(net_t* net);
 
-//update net correspondingly to new coords of nodes 
+//update net correspondingly to new coords of nodes
 void update_net(net_t net);
 
 //set neccassary links between parts of net
@@ -87,19 +90,19 @@ point_t node_to_net_projection(node_t* node, net_t net, double* sqr_distance);
 //initialize some optimizational collision parameters
 void nets_t_construct_nodes_contact(nets_t nets);
 
-//return useful size of net for serialization in bytes 
+//return useful size of net for serialization in bytes
 //including serialization size of content
 int get_net_size(net_t net);
 
 //return useful size of net container including content for serialization in bytes
 int get_nets_size(nets_t nets);
 
-//save seralized net into buffer 
+//save seralized net into buffer
 //ATTENTION: buffer must have enough size
 //return current seek in buffer_id
 char* serialize_net(net_t net, char* buffer);
 
-//save seralized net container with content into buffer 
+//save seralized net container with content into buffer
 //ATTENTION: buffer must have enough size
 //return current seek in buffer
 char* serialize_nets(nets_t nets, int* fullsize);

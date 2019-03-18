@@ -5,6 +5,10 @@
 #include <string.h>
 #include <sys/time.h>
 
+#include <SDL/SDL.h>
+#include <GL/gl.h>
+#include <GL/glu.h>
+
 #include "nets.h"
 #include "stress.h"
 #include "precomputation.h"
@@ -16,6 +20,7 @@
 #include "separate.h"
 #include "sew_leaf.h"
 #include "bound-box.h"
+#include "camera.h"
 
 #define RES_STL         "results/sew0"
 #define RES_LEAF_STL    "results/sew0_leaf"
@@ -33,6 +38,13 @@ long get_msec_time(struct timeval start, struct timeval end){
 	long seconds  = end.tv_sec  - start.tv_sec;
     long useconds = end.tv_usec - start.tv_usec;
 	long mtime = ((seconds) * 1000 + useconds / 1000.0) + 0.5;
+	return mtime;
+}
+
+long double get_msec_time_(struct timeval start, struct timeval end){
+	long double seconds  = end.tv_sec  - start.tv_sec;
+    long double useconds = end.tv_usec - start.tv_usec;
+	long double mtime = (seconds) * 1000 + useconds / 1000.0;
 	return mtime;
 }
 
@@ -181,36 +193,135 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 		printf("%s: h = %lg, h_c = %lg, S_max = %lg, S_min = %lg\n", OUTPUT, h, h_c, S_max, S_min);
 	}
 }
+
+void renderSoftBody(net_t net, point_t fcolor){
+    glColor3d(fcolor.coord[0], fcolor.coord[1], fcolor.coord[2]);
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < net.elems.count; ++i)
+    {
+        elem_t* elem = net.elems.elems[i];
+        for(int j = 0; j < 3; ++j)
+        {
+            point_t x = elem->vrts[j]->coord;
+            glVertex3d(x.coord[0], x.coord[1], x.coord[2]);
+        }
+    }
+    glEnd();
+
+    glColor3f(0.6, 0.6, 0.6);
+    glBegin(GL_LINES);
+    for (int i = 0; i < net.springs.count; ++i)
+    {
+        spring_t* spr = net.springs.springs[i];
+        for(int j = 0; j < 2; ++j)
+        {
+            point_t x = spr->ends[j]->coord;
+            glVertex3d(x.coord[0], x.coord[1], x.coord[2]);
+        }
+    }
+    glEnd();
+}
+
+void display(world_t* world, camera_t* cam)
+{
+	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glLoadIdentity();
+	camera_t_Control(cam);
+	//drawSkybox(50);
+	camera_t_UpdateCamera(cam);
+	for (unsigned i = 0; i < world->dynamic_nets.count; ++i)
+        renderSoftBody(world->dynamic_nets.nets[i], point_t_get_point(0.296, 0.221, 0.231));
+
+    for (unsigned i = 0; i < world->static_nets.count; ++i)
+        renderSoftBody(world->static_nets.nets[i], point_t_get_point(205.0/256, 200.0/256, 239.0/256));
+
+}
+
+void run_comupation(world_t* world){
+    SDL_Init(SDL_INIT_EVERYTHING);
+	SDL_SetVideoMode(1280,800,32,SDL_OPENGL);
+	Uint32 _start;
+	SDL_Event event;
+	int running=1;
+	float angle=45;
+	glClearColor(0,0,0,1);
+	glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		gluPerspective(angle,1280.0/800.0,1,1000);
+	glMatrixMode(GL_MODELVIEW);
+	glEnable(GL_DEPTH_TEST);
+	camera_t* cam = camera_t_construct(point_t_get_point(-45.8, -22, 34.6));
+	cam->camPitch = -8;
+	cam->camYaw = 308;
+
+	while(running)
+	{
+		_start=SDL_GetTicks();
+		while(SDL_PollEvent(&event))
+		{
+			switch(event.type)
+			{
+				case SDL_QUIT:
+					running=0;
+					break;
+				case SDL_KEYDOWN:
+					switch(event.key.keysym.sym)
+					{
+						case SDLK_ESCAPE:
+							running=0;
+							break;
+						case SDLK_y:
+							camera_t_mouseIn(cam, 0);
+							break;
+						case SDLK_SPACE:
+                        {
+                            printf("current possition: "); point_t_dump(cam->loc); printf("\n");
+                            printf("camPitch = %lg, camYaw = %lg\n", cam->camPitch, cam->camYaw);
+							break;
+                        }
+                        default: break;
+					}
+					break;
+				case SDL_MOUSEBUTTONDOWN:
+				{
+                    camera_t_mouseIn(cam, !camera_t_isMouseIn(cam));
+					break;
+                }
+                default: break;
+
+			}
+		}
+		compute_nets_time(1000.0/60, world, 1000);
+        display(world, cam);
+		SDL_GL_SwapBuffers();
+		if(1000.0/60>SDL_GetTicks()-_start)
+			SDL_Delay(1000.0/60-(SDL_GetTicks()-_start));
+	}
+
+	SDL_Quit();
+	camera_t_destruct(cam);
+}
+
 //######################################################################
 //######################################################################
 int main(){
 	nets_t aorta = download_aorta((char*)AORTA_IN);
-	//to_stl(aorta, "res-aorta");
 	printf("elems.count = %u\n", aorta.nets[0].elems.count);
-	//net_t_set_state(&aorta.nets[0], 1);
 	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-	//set_contact_recognition_resolution(0.51098);
-	/*box_t box = box_t_construct(aorta, get_Contact_Resolution());
-	nets_t_update_box(aorta, &box);
-	point_t intersect = {};
-	point_t line[2];
-	line[0] = VEC(-32.2005, -36.3946, 8.15829);
-	//printf("find "); point_t_dump(line[0]);
-	line[1] = SUM(line[0], VEC(1, 1, 1));
-	if (line_to_boxed_nets_intersection(line, aorta, 0, box, &intersect)){
-		printf("Intersection at ");
-		point_t_dump(intersect);
-	}*/
 	point_t shift = point_t_get_point(5, 1, -3.3);
 	nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)INPUT, (char*)INPUT, (char*)INPUT);
-	/*nets_t researched = nets_t_get_net(2);
-	nets_t leaf = nets_t_get_net(1);
-	researched.nets[0] = leaflet.nets[1];
-	leaf.nets[0] = leaflet.nets[1];
-	to_stl(leaf, RES_LEAF_STL);
-	researched.nets[1] = leaflet.nets[3];
-	to_stl(researched, RES_A_L_STL);*/
-	//to_stl(leaflet, RES_STL);
+
+    nets_t dynamic_nets = nets_t_get_net(3);
+    for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
+    nets_t static_nets = nets_t_get_net(1);
+    static_nets.nets[0] = leaflet.nets[3];
+    solver_t solver_data = {2e-7, 0.001};
+    collision_t collision_data = collision_data_t_construct(dynamic_nets, static_nets, 10);
+    wrld_cnd_t conditions = {80.0};
+    world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
+    set_initial_solving_params(world);
+    run_comupation(world);
+
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -220,31 +331,29 @@ int main(){
 	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
 	int max_nsteps = 28000, freq = 150;
 	double eps = 0;
-	compute_nets(leaflet, P, delta, max_nsteps, eps, freq);
+	//compute_nets(leaflet, P, delta, max_nsteps, eps, freq);
 	nets_t curleaflet = get_valve_from_system(leaflet);
 	curleaflet = create_next_hierarchical_nets(curleaflet);
-	/*for (int i = 0; i < 3; i++) leaflet.nets[i] = curleaflet.nets[i];
-	auto_set_contact_recognition_consts(curleaflet, NULL);
-	max_nsteps = 4000;
-	for (int i = 1; i < 2; i++){
-		compute_nets(leaflet, P, delta, max_nsteps, eps, freq);
-		printf ("MADE %d iterations\n", (i + 1) * max_nsteps);
-		char res[10] = {};
-		sprintf(res, "res%d", i+1);
-		//to_stl(curleaflet, res);
-	}*/
-	//for (int jj = 0; jj < 4; ++jj)
 	int jj = 3;
 	for (unsigned int ii = 0; ii < leaflet.nets[jj].elems.count; ++ii){
 		leaflet.nets[jj].elems.elems[ii]->coef *= -1;
 	}
 	to_stl(leaflet, (char*)OUTPUT);
 	gettimeofday(&end, NULL);
-	printf("Time of precomputation = %ld ms\n", get_msec_time(start, end));
+	//printf("Time of precomputation = %ld ms\n", get_msec_time(start, end));
 
 	print_nets_statistic(leaflet, shift);
 
 	printf("P = %lg, %s\n", P, OUTPUT);
+
+	world_t_destruct(world);
+	collision_data_t_destruct(collision_data);
+	nets_t_destruct(curleaflet);
+	nets_t_surfacial_free(dynamic_nets);
+	nets_t_surfacial_free(static_nets);
+	nets_t_surfacial_free(aorta);
+	nets_t_destruct(leaflet);
+
 
 	return 0;
 }

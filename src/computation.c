@@ -1,6 +1,7 @@
 #include <float.h>
 #include <math.h>
 #include <stdlib.h>
+#include <string.h>
 #include "save-data.h"
 #include "format_in.h"
 #include "precomputation.h"
@@ -407,6 +408,153 @@ void compute_nets(nets_t nets, double P, double delta, unsigned int n, double ep
 
 	box_t_destruct(&box);
 	free(Mid_Shift);
+}
+
+
+
+world_t* world_t_construct(nets_t dynamic_nets, nets_t static_nets, solver_t solver_data, collision_t collision_data, wrld_cnd_t conditions){
+    world_t* world = (world_t*)calloc(1, sizeof(world_t));
+    world->dynamic_nets = dynamic_nets;
+    world->static_nets = static_nets;
+    world->collision = collision_data;
+    world->conditions = conditions;
+    world->solver_data = solver_data;
+    world->statistic = statistical_data_construct(dynamic_nets);
+    world->union_nets = create_union_net(dynamic_nets, static_nets);
+    set_initial_solving_params(world);
+    return world;
+}
+
+void world_t_destruct(world_t* world){
+    statistical_data_destruct(&world->statistic);
+    nets_t_surfacial_free(world->union_nets);
+    free(world);
+}
+
+statistic_t statistical_data_construct(nets_t nets){
+    unsigned int cnt_nodes = 0, cnt_nets = nets.count, i;
+	for (i = 0; i < cnt_nets; i++)
+        cnt_nodes += nets.nets[i].vrtx.count;
+	point_t* mid_shift = (point_t*) calloc(cnt_nodes, sizeof(point_t));
+    statistic_t stat = {mid_shift, cnt_nodes, 0, 1.0};
+    return stat;
+}
+
+void statistical_data_destruct(statistic_t *st){
+    st->cnt_nodes = 0;
+    free(st->mid_shift);
+}
+
+nets_t create_union_net(nets_t nets1, nets_t nets2){
+    unsigned int un_cnt = nets1.count + nets2.count;
+    nets_t nets = nets_t_get_net(un_cnt);
+    for (unsigned int i = 0; i < nets1.count; ++i)
+        nets.nets[i] = nets1.nets[i];
+    for (unsigned int i = 0; i < nets2.count; ++i)
+        nets.nets[i + nets1.count] = nets2.nets[i];
+
+    return nets;
+}
+
+collision_t collision_data_t_construct(nets_t dynamic_nets, nets_t static_nets, int check_freq){
+    double constr_freq = (sqrt(Contact_Resolution / Max_shift) - 1);
+	int freq = (constr_freq > check_freq) ? (int) constr_freq : check_freq;
+    nets_t union_nets = create_union_net(dynamic_nets, static_nets);
+	box_t box = box_t_construct(union_nets, get_Contact_Resolution());
+	nets_t_surfacial_free(union_nets);
+	collision_t collision = {box, freq, -1};
+	return collision;
+}
+
+void collision_data_t_destruct(collision_t cl){
+    box_t_destruct(&cl.box);
+    cl.check_freq = -1;
+    cl.counter = -1;
+}
+
+void collision_data_t_update(nets_t nets, collision_t* coll_data){
+    nets_t_update_box(nets, &coll_data->box);
+    ++coll_data->counter;
+}
+
+int collision_t_get_state(collision_t coll_data){
+    return coll_data.counter % coll_data.check_freq;
+}
+
+void update_statistic_t(nets_t nets, statistic_t *st){
+    unsigned int nets_cnt = nets.count, cnt = 0;
+	for (unsigned int i = 0; i < nets_cnt; ++i){
+		unsigned int node_cnt = nets.nets[i].vrtx.count;
+		for (unsigned int j = 0; j < node_cnt; ++j){
+			node_t* node = nets.nets[i].vrtx.nodes[j];
+			point_t shift = point_t_dif((*node).next, (*node).coord);
+			st->mid_shift[cnt] = point_t_sum(st->mid_shift[cnt], shift);
+			++cnt;
+		}
+	}
+	++(st->it_cnt);
+}
+
+double statistic_t_get_max_mid_diviation(statistic_t st){
+    double max_shift = 0;
+    for (unsigned int l = 0; l < st.cnt_nodes; ++l){
+        double len = SQR_LEN(st.mid_shift[l]);
+        if (max_shift < len) max_shift = len;
+    }
+    return sqrt(max_shift)/st.it_cnt;
+}
+
+double statistic_t_get_full_mid_diviation(statistic_t st){
+    double max_shift = 0;
+    for (unsigned int l = 0; l < st.cnt_nodes; ++l)
+        max_shift += SQR_LEN(st.mid_shift[l]);
+    return sqrt(max_shift)/st.it_cnt;
+}
+
+void statistic_t_reset(statistic_t *st){
+    memset(st->mid_shift, 0, st->cnt_nodes * sizeof(point_t));
+    st->it_cnt = 0;
+}
+
+void set_initial_solving_params(world_t* world){
+    collision_data_t_update(world->union_nets, &world->collision);
+    --world->collision.counter;
+    compute_nexts(world->union_nets, world->conditions.P, world->solver_data.delta, \
+                        collision_t_get_state(world->collision), world->collision.box);
+    update_statistic_t(world->dynamic_nets, &world->statistic);
+
+    world->statistic.init_div = statistic_t_get_full_mid_diviation(world->statistic);
+    statistic_t_reset(&world->statistic);
+}
+
+long double compute_dif_ms(struct timeval end, struct timeval start){
+    long double seconds  = end.tv_sec  - start.tv_sec;
+    long double useconds = end.tv_usec - start.tv_usec;
+    long double mtime = (seconds) * 1000 + useconds / 1000.0;
+    return mtime;
+}
+
+//eps пока никак не используется
+void compute_nets_time(long double compute_time, world_t* world, int max_its)
+{
+    struct timeval start, end;
+	gettimeofday(&start, NULL);
+	int i = 0, crush = 0;
+	for (i = 0; i < max_its; ++i){
+        collision_data_t_update(world->union_nets, &world->collision);
+        crush += compute_nexts(world->union_nets, world->conditions.P, world->solver_data.delta, \
+                        collision_t_get_state(world->collision), world->collision.box);
+        update_statistic_t(world->dynamic_nets, &world->statistic);
+        update_nets(world->dynamic_nets);
+
+        gettimeofday(&end, NULL);
+		if (compute_dif_ms(end, start) >= compute_time - 0.8) break;
+	}
+	double res = statistic_t_get_full_mid_diviation(world->statistic);
+	double rms = res / world->statistic.cnt_nodes;
+	//printf("RMS shift per iter of node = %e mm, relation = %lg, cr = %d / %d\n", rms , res / world->statistic.init_div, crush, i+1);
+	statistic_t_reset(&world->statistic);
+
 }
 
 point_t get_init_shift(point_t points[3]){			//не возвращает ошибки
