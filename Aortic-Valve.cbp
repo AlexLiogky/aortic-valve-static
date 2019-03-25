@@ -12,6 +12,7 @@
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
+					<Add option="-std=c++1z" />
 					<Add option="-g" />
 					<Add directory="include" />
 				</Compiler>
@@ -23,6 +24,7 @@
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-O2" />
+					<Add directory="include" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
@@ -33,14 +35,20 @@
 			<Add option="-Wall" />
 			<Add option="-fexceptions" />
 			<Add directory="usr/include" />
+			<Add directory="/home/alex/Desktop/prog/C++-prog/Bullet/BulletTrainig/bullet3-2.88/src" />
 		</Compiler>
 		<Linker>
 			<Add library="SDL" />
 			<Add library="GL" />
 			<Add library="GLU" />
 			<Add library="SDL_image" />
-			<Add directory="usr/lib" />
+			<Add library="BulletCollision_codeblocks_x64_release" />
+			<Add library="LinearMath_codeblocks_x64_release" />
+			<Add library="Bullet3Collision_codeblocks_x64_release" />
+			<Add directory="/home/alex/Desktop/prog/C++-prog/Bullet/BulletTrainig/bullet3-2.88/bin" />
 		</Linker>
+		<Unit filename="include/Net_Wraper.h" />
+		<Unit filename="include/Solver.h" />
 		<Unit filename="include/ani_lin_stress.h" />
 		<Unit filename="include/bound-box.h" />
 		<Unit filename="include/camera.h">
@@ -63,63 +71,64 @@
 		<Unit filename="include/spring.h" />
 		<Unit filename="include/stress-interface.h" />
 		<Unit filename="include/stress.h" />
+		<Unit filename="src/Net_Wraper.cpp" />
+		<Unit filename="src/Solver.cpp" />
 		<Unit filename="src/ani_lin_stress.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/bound-box.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/camera.c">
-			<Option compilerVar="CC" />
-			<Option target="&lt;{~None~}&gt;" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/computation.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/data.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/elem.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/format_in.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/hermit-splines.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/intersection.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/main.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/nets.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/node.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/point.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/postcomputation.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/precomputation.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/save-data.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/separate.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/sew_leaf.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/spring.c">
-			<Option compilerVar="CC" />
+			<Option compilerVar="CPP" />
 		</Unit>
 		<Extensions>
 			<code_completion />

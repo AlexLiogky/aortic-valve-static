@@ -1,5 +1,5 @@
-#ifndef _POINT_H 
-#define _POINT_H 
+#ifndef _POINT_H
+#define _POINT_H
 
 #define DIM 3
 
@@ -21,7 +21,7 @@ point_t point_t_dif(point_t point1, point_t point2); 		//return z = x - y
 double point_t_scal_mul(point_t point1, point_t point2); 	//return (x, y)
 double point_t_sqr_len(point_t point); 						//return |x|^2
 double point_t_length(point_t point); 						//return |x|
-point_t point_t_vec_mul(point_t point1, point_t point2); 	//return [x, y] 
+point_t point_t_vec_mul(point_t point1, point_t point2); 	//return [x, y]
 void normalize(point_t* point); 							//x <- x / |x|
 point_t normalize_new(point_t point); 						//return y = x / |x|
 
@@ -29,16 +29,16 @@ point_t normalize_new(point_t point); 						//return y = x / |x|
 int point_t_equal(point_t point1, point_t point2, double err);
 
 //return 1 if every coord of x is less than correspondig coord of y else 0
-int point_t_less(point_t pnt1, point_t pnt2); 
+int point_t_less(point_t pnt1, point_t pnt2);
 
 //return 1 if every coord of x is less of equal than correspondig coord of y else 0
-int point_t_less_eq(point_t pnt1, point_t pnt2); 
+int point_t_less_eq(point_t pnt1, point_t pnt2);
 
 //return 1 if every coord of x is greater than correspondig coord of y else 0
-int point_t_greater(point_t pnt1, point_t pnt2); 
+int point_t_greater(point_t pnt1, point_t pnt2);
 
 //return 1 if every coord of x is greater or equal than correspondig coord of y else 0
-int point_t_greater_eq(point_t pnt1, point_t pnt2); 
+int point_t_greater_eq(point_t pnt1, point_t pnt2);
 
 //return oriented area of triangle built on the points
 point_t point_t_or_area(point_t point1, point_t point2, point_t point3);
@@ -52,9 +52,9 @@ double point_t_or_volume(point_t point1, point_t point2, point_t point3, point_t
 //debug print to standart output content of the point
 void point_t_dump(point_t point);
 
-//retrun x / |x[i_inf]| * sig(x[i_inf]), 
-//where i_inf = arg max_i |x[i]| and 
-//		sig(x[i_inf]) = 1,				if !(*sign) 
+//retrun x / |x[i_inf]| * sig(x[i_inf]),
+//where i_inf = arg max_i |x[i]| and
+//		sig(x[i_inf]) = 1,				if !(*sign)
 //		sig(x[i_inf]) = sign(x[i_inf]), else
 point_t signed_norm_inf(point_t point, int* sign, int* n_max_crd);
 
@@ -114,7 +114,7 @@ int line_to_triangle_intersection(point_t line[2], point_t triangle[3], point_t*
 
 //save intersection between line segment and interior of triangle into "intersect"
 //line defined by own point "start" and directional vector "shift"
-//triangle defined by own 3 points and for optimization 
+//triangle defined by own 3 points and for optimization
 //"triangle[3]" must contain normal vector
 //return count of intersections (2 means infinite count of intersections)
 int line_fragment_to_trangle_intersection(point_t start, point_t shift, point_t triangle[4], point_t* intersect);
@@ -180,5 +180,11 @@ typedef struct line_t{
 
 //debug print of line_t object
 void line_t_dump(line_t line);
+
+//return bary coordinates of triangle placed on "a", "b", "c"
+point_t point_t_bary_coord( const point_t a,
+                            const point_t b,
+                            const point_t c,
+                            const point_t p);
 
 #endif

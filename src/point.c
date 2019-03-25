@@ -18,7 +18,7 @@ point_t point_t_get_point(double x, double y, double z){
 	point.coord[0] = x;
 	point.coord[1] = y;
 	point.coord[2] = z;
-	
+
 	return point;
 }
 
@@ -27,7 +27,7 @@ int point_t_equal(point_t point1, point_t point2, double err){
 	for (i = 0; i < DIM; i++){
 		res *= (fabs(point1.coord[i] - point2.coord[i]) < err);
 	}
-	
+
 	return res;
 }
 
@@ -41,7 +41,7 @@ point_t point_t_coef_mul_new(double coef, point_t point){
 	point_t res;
 	for (int i = 0; i < DIM; i++)
 		res.coord[i] = point.coord[i] * coef;
-	
+
 	return res;
 }
 
@@ -158,7 +158,7 @@ double get_area(point_t point1, point_t point2, point_t point3){
 	return LEN(OR_AREA(point1, point2, point3));
 }
 
-void point_t_dump(point_t point){ 
+void point_t_dump(point_t point){
 	double x = point.coord[0], y = point.coord[1], z = point.coord[2];
 	printf("point = (%lg, %lg, %lg)\n", x, y, z);
 }
@@ -200,7 +200,7 @@ point_t point_to_line_segment_projection(point_t point, point_t line_segment[2])
 	return projection;
 }
 
-//если хранить нормаль у элементов, то следующую функцию можно 
+//если хранить нормаль у элементов, то следующую функцию можно
 //оптимизировать для вычисления элементов
 point_t point_to_plate_projection(point_t point, point_t plate[3]){
 	point_t normal = OR_AREA(plate[0], plate[1], plate[2]);
@@ -240,8 +240,8 @@ int line_to_normal_plate_intersection(point_t dir, point_t line, point_t normal,
 		if (fabs(DOT(normal, DIF(plate, line))) > 10 * DBL_EPSILON)
 			return 0;
 		if (intersect != NULL) *intersect = line;
-		return 2;	
-	}	
+		return 2;
+	}
 }
 
 int line_to_plate_intersection(point_t line[2], point_t plate[3], point_t* intersect){
@@ -264,7 +264,7 @@ int is_point_belongs_triangle(point_t point, point_t triangle[3]){//point must b
 int line_intersect_line(point_t l1[2], point_t l2[2], point_t* intersect){ //lines must belong to one plate
 	point_t d2 = DIF(l2[1], l2[0]), d1 = DIF(l1[1], l1[0]);
 	point_t normal = DIF(d2, DIR_PROJ(d2, d1));
-	
+
 	if (!EQ_ERR(normal, ZERO(), 10 * DBL_EPSILON)){
 		return line_to_normal_plate_intersection(d2, l2[0], normal, l1[0], intersect);
 	}else{
@@ -310,7 +310,7 @@ int line_to_triangle_intersection(point_t line[2], point_t triangle[3], point_t*
 	sides[1][0] = triangle[1], sides[1][1] = triangle[2];
 	sides[2][0] = triangle[2], sides[2][1] = triangle[0];
 	for (int i = 0; i < 3; i++)
-		if (line_intersect_line_segment(line, sides[i], intersect) > 0) 
+		if (line_intersect_line_segment(line, sides[i], intersect) > 0)
 			return 2;
 	return 0;
 }
@@ -334,7 +334,7 @@ int line_fragment_to_trangle_intersection(point_t start, point_t shift, point_t 
 		if (intersect) *intersect = cur_inter;
 		return 1;
 	}
-	
+
 	return 0;
 }
 
@@ -352,7 +352,7 @@ point_t point_to_triangle_projection(point_t point, point_t triangle[3], double*
 			*sqr_dist = SQR_LEN(DIF(plate_projection, point));
 		return plate_projection;
 	}
-	
+
 	point_t projs[3];
 	double min_proj = 1e+20;
 	int ip;
@@ -368,9 +368,23 @@ point_t point_to_triangle_projection(point_t point, point_t triangle[3], double*
 	if (sqr_dist != NULL) {
 			*sqr_dist = min_proj;
 		}
-	
+
 	return projs[ip];
-	
+
+}
+
+point_t point_t_bary_coord( point_t a,
+                            point_t b,
+                            point_t c,
+                            const point_t p)
+{
+	ADD_S(&a, -1, p);
+	ADD_S(&b, -1, p);
+	ADD_S(&c, -1, p);
+	const double w[3] = {LEN(CROSS(a, b)), LEN(CROSS(b, c)), LEN(CROSS(c, a))};
+
+	const double isum = 1.0 / (w[0] + w[1] + w[2]);
+	return (point_t_get_point(w[1] * isum, w[2] * isum, w[0] * isum));
 }
 
 
@@ -407,7 +421,7 @@ matrix3D_t matrix3D_t_inverse(matrix3D_t m){
       for(int j = 0; j < 3; j++)
            res.matrix[j][i] = (m.matrix[(i + 1) % 3][(j + 1) % 3] * m.matrix[(i + 2) % 3][(j + 2) % 3] -\
 						m.matrix[(i + 1) % 3][(j + 2) % 3] * m.matrix[(i + 2) % 3][(j + 1) % 3]) / det;
-	
+
 	return res;
 }
 
@@ -432,7 +446,7 @@ f_point_t f_point_t_convert(point_t point){
 	f_point_t mypoint;
 	for (int i = 0; i < DIM; i++)
 		mypoint.coord[i] = (float) point.coord[i];
-	
+
 	return mypoint;
 }
 
@@ -448,7 +462,7 @@ int f_point_t_eq(f_point_t p1, f_point_t p2){
 	for (int i = 0; i < 3; i++)
 		flag += (fabsf(p1.coord[i] - p2.coord[i]) <= FLT_EPSILON);
 	return (flag == 3);
-} 
+}
 
 void line_t_dump(line_t line){
 	printf("line_t:: { len = %d\n", line.pnt_cnt);

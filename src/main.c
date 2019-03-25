@@ -21,6 +21,7 @@
 #include "sew_leaf.h"
 #include "bound-box.h"
 #include "camera.h"
+#include "Solver.h"
 
 #define RES_STL         "results/sew0"
 #define RES_LEAF_STL    "results/sew0_leaf"
@@ -194,10 +195,10 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 	}
 }
 
-void renderSoftBody(net_t net, point_t fcolor){
+void renderSoftBody(const net_t net, point_t fcolor){
     glColor3d(fcolor.coord[0], fcolor.coord[1], fcolor.coord[2]);
     glBegin(GL_TRIANGLES);
-    for (int i = 0; i < net.elems.count; ++i)
+    for (unsigned int i = 0; i < net.elems.count; ++i)
     {
         elem_t* elem = net.elems.elems[i];
         for(int j = 0; j < 3; ++j)
@@ -210,7 +211,7 @@ void renderSoftBody(net_t net, point_t fcolor){
 
     glColor3f(0.6, 0.6, 0.6);
     glBegin(GL_LINES);
-    for (int i = 0; i < net.springs.count; ++i)
+    for (unsigned int i = 0; i < net.springs.count; ++i)
     {
         spring_t* spr = net.springs.springs[i];
         for(int j = 0; j < 2; ++j)
@@ -234,6 +235,23 @@ void display(world_t* world, camera_t* cam)
 
     for (unsigned i = 0; i < world->static_nets.count; ++i)
         renderSoftBody(world->static_nets.nets[i], point_t_get_point(205.0/256, 200.0/256, 239.0/256));
+
+}
+
+void display(Solver* s, camera_t* cam)
+{
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+	glLoadIdentity();
+	camera_t_Control(cam);
+	//drawSkybox(50);
+	camera_t_UpdateCamera(cam);
+	nets_t& nets = s->getDynamicNets();
+	for (unsigned i = 0; i < nets.count; ++i)
+        renderSoftBody(nets.nets[i], point_t_get_point(0.296, 0.221, 0.231));
+
+    nets_t& nets1 = s->getStaticNets();
+    for (unsigned i = 0; i < nets1.count; ++i)
+        renderSoftBody(nets1.nets[i], point_t_get_point(205.0/256, 200.0/256, 239.0/256));
 
 }
 
@@ -302,6 +320,72 @@ void run_comupation(world_t* world){
 	camera_t_destruct(cam);
 }
 
+void run_comupation(Solver* s){
+    SDL_Init(SDL_INIT_EVERYTHING);
+	SDL_SetVideoMode(1280,800,32,SDL_OPENGL);
+	Uint32 _start;
+	SDL_Event event;
+	int running=1;
+	float angle=45;
+	glClearColor(0,0,0,1);
+	glMatrixMode(GL_PROJECTION);
+		glLoadIdentity();
+		gluPerspective(angle,1280.0/800.0,1,1000);
+	glMatrixMode(GL_MODELVIEW);
+	glEnable(GL_DEPTH_TEST);
+	camera_t* cam = camera_t_construct(point_t_get_point(-45.8, -22, 34.6));
+	cam->camPitch = -8;
+	cam->camYaw = 308;
+
+	while(running)
+	{
+		_start=SDL_GetTicks();
+		while(SDL_PollEvent(&event))
+		{
+			switch(event.type)
+			{
+				case SDL_QUIT:
+					running=0;
+					break;
+				case SDL_KEYDOWN:
+					switch(event.key.keysym.sym)
+					{
+						case SDLK_ESCAPE:
+							running=0;
+							break;
+						case SDLK_y:
+							camera_t_mouseIn(cam, 0);
+							break;
+						case SDLK_SPACE:
+                        {
+                            printf("current possition: "); point_t_dump(cam->loc); printf("\n");
+                            printf("camPitch = %lg, camYaw = %lg\n", cam->camPitch, cam->camYaw);
+							break;
+                        }
+                        default: break;
+					}
+					break;
+				case SDL_MOUSEBUTTONDOWN:
+				{
+                    camera_t_mouseIn(cam, !camera_t_isMouseIn(cam));
+					break;
+                }
+                default: break;
+
+			}
+		}
+		double dt = 1000.0/60;
+		s->compute_nets_time(dt, 1000);
+        display(s, cam);
+		SDL_GL_SwapBuffers();
+		if(dt>SDL_GetTicks()-_start)
+			SDL_Delay(dt-(SDL_GetTicks()-_start));
+	}
+
+	SDL_Quit();
+	camera_t_destruct(cam);
+}
+
 //######################################################################
 //######################################################################
 int main(){
@@ -311,7 +395,7 @@ int main(){
 	point_t shift = point_t_get_point(5, 1, -3.3);
 	nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)INPUT, (char*)INPUT, (char*)INPUT);
 
-    nets_t dynamic_nets = nets_t_get_net(3);
+    /*nets_t dynamic_nets = nets_t_get_net(3);
     for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
     nets_t static_nets = nets_t_get_net(1);
     static_nets.nets[0] = leaflet.nets[3];
@@ -320,8 +404,25 @@ int main(){
     wrld_cnd_t conditions = {80.0};
     world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
     set_initial_solving_params(world);
+    struct timeval start1, end1;
+	gettimeofday(&start1, NULL);
     run_comupation(world);
+    gettimeofday(&end1, NULL);
+	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
 
+    /*nets_t dynamic_nets = nets_t_get_net(3);
+    for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
+    nets_t static_nets = nets_t_get_net(0);
+    //static_nets.nets[0] = leaflet.nets[3];
+    solver_t solver_data = {2e-7, 0.001};
+    wrld_cnd_t conditions = {80.0};
+    Solver s(dynamic_nets, static_nets, conditions, solver_data, Allow_shift, Max_shift);
+    struct timeval start1, end1;
+	gettimeofday(&start1, NULL);
+    run_comupation(&s);
+    gettimeofday(&end1, NULL);
+	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
+    return 0;
 
 	struct timeval start, end;
 	gettimeofday(&start, NULL);
@@ -346,8 +447,8 @@ int main(){
 
 	printf("P = %lg, %s\n", P, OUTPUT);
 
-	world_t_destruct(world);
-	collision_data_t_destruct(collision_data);
+	//world_t_destruct(world);
+	//collision_data_t_destruct(collision_data);
 	nets_t_destruct(curleaflet);
 	nets_t_surfacial_free(dynamic_nets);
 	nets_t_surfacial_free(static_nets);

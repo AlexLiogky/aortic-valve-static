@@ -163,6 +163,8 @@ void set_initial_solving_params(world_t* world);
 long double compute_dif_ms(struct timeval end, struct timeval start);
 
 void compute_nets_time(long double compute_time, world_t* world, int max_its);
+
+void relaxation(nets_t nets, double coef);
 //############computation###############################################
 
 #endif

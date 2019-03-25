@@ -25,7 +25,7 @@ void camera_t_moveCameraUp(camera_t* cam, float dir);
 
 camera_t* camera_t_construct(point_t l);
 
-camera_t* camera_t_destruct(camera_t* cam);
+void camera_t_destruct(camera_t* cam);
 
 void camera_t_Control(camera_t* cam);
 
