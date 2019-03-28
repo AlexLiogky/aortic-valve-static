@@ -22,6 +22,7 @@
 #include "bound-box.h"
 #include "camera.h"
 #include "Solver.h"
+#include "World.h"
 
 #define RES_STL         "results/sew0"
 #define RES_LEAF_STL    "results/sew0_leaf"
@@ -223,6 +224,7 @@ void renderSoftBody(const net_t net, point_t fcolor){
     glEnd();
 }
 
+
 void display(world_t* world, camera_t* cam)
 {
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -238,7 +240,8 @@ void display(world_t* world, camera_t* cam)
 
 }
 
-void display(Solver* s, camera_t* cam)
+template <class TT>
+void displayT(TT* s, camera_t* cam)
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 	glLoadIdentity();
@@ -320,7 +323,8 @@ void run_comupation(world_t* world){
 	camera_t_destruct(cam);
 }
 
-void run_comupation(Solver* s){
+template<class TT>
+void run_comupationT(TT* s){
     SDL_Init(SDL_INIT_EVERYTHING);
 	SDL_SetVideoMode(1280,800,32,SDL_OPENGL);
 	Uint32 _start;
@@ -376,7 +380,7 @@ void run_comupation(Solver* s){
 		}
 		double dt = 1000.0/60;
 		s->compute_nets_time(dt, 1000);
-        display(s, cam);
+        displayT<TT>(s, cam);
 		SDL_GL_SwapBuffers();
 		if(dt>SDL_GetTicks()-_start)
 			SDL_Delay(dt-(SDL_GetTicks()-_start));
@@ -410,18 +414,19 @@ int main(){
     gettimeofday(&end1, NULL);
 	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
 
-    /*nets_t dynamic_nets = nets_t_get_net(3);
-    for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
-    nets_t static_nets = nets_t_get_net(0);
-    //static_nets.nets[0] = leaflet.nets[3];
+    nets_t dynamic_nets = nets_t_get_net(1);
+    //for (unsigned int i = 0; i < dynamic_nets.count; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
+    dynamic_nets.nets[0] = leaflet.nets[1];
+    nets_t static_nets = nets_t_get_net(1);
+    static_nets.nets[0] = leaflet.nets[3];
     solver_t solver_data = {2e-7, 0.001};
     wrld_cnd_t conditions = {80.0};
-    Solver s(dynamic_nets, static_nets, conditions, solver_data, Allow_shift, Max_shift);
+    World s(dynamic_nets, static_nets, conditions, solver_data, Allow_shift, Max_shift);
     struct timeval start1, end1;
 	gettimeofday(&start1, NULL);
-    run_comupation(&s);
+    run_comupationT<World>(&s);
     gettimeofday(&end1, NULL);
-	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
+	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
     return 0;
 
 	struct timeval start, end;

@@ -6,13 +6,13 @@
 
 
 #define DEFOLT_DATA_ELEM_SIZE 4
- 
+
 //coord(i, j, k, n) -> (i * n_j * n_k + j * n_k + k) * n_n + n
 //coord(n, i, j, k) -> n * n_i * n_j * n_k + i * n_j * n_k + j * n_k + k
 
 typedef struct box_t{
 	point_t start;
-	double step; 
+	double step;
 	int borders[3];
 	int nets_cnt;
 	int dyn_nets_cnt;
@@ -23,7 +23,7 @@ typedef struct box_t{
 typedef struct crd_t{
 	int crd[4];
 } crd_t;
-//data[coord][nets.count] - массив, где нулевое число - его alloc-размер (c учётом этого числа), 
+//data[coord][nets.count] - массив, где нулевое число - его alloc-размер (c учётом этого числа),
 //а первое число - занятый размер (без учёта первых чисел)
 
 //return coordinates of block which content point "coord" of net with id "net_id"
@@ -52,7 +52,7 @@ void init_static(nets_t nets, box_t* box);
 box_t box_t_construct(nets_t nets, double step);
 void box_t_destruct(box_t* box); //destructor
 
-//extend box to contain point crd 
+//extend box to contain point crd
 void recreate_box(nets_t nets, box_t* box, crd_t crd);
 
 //update box correspondingly coords of nets nodes
@@ -79,5 +79,8 @@ void box_t_local_point_to_net_projection(box_t box, point_t point, net_t net, in
 //if (sqr_distance != NULL) set square of distance from node to the projection here
 void box_t_local_node_to_net_projection(box_t box, node_t* node, net_t net, int net_id, double* sqr_distance);
 
+void extend_borders(double coef, double brds[3][2]);
+void nets_t_fill_borders(nets_t nets, double res[3][2]);
 
-#endif 
+
+#endif

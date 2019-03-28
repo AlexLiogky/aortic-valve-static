@@ -16,6 +16,11 @@
 					<Add option="-g" />
 					<Add directory="include" />
 				</Compiler>
+				<Linker>
+					<Add library="BulletCollision_codeblocks_x64_debug" />
+					<Add library="LinearMath_codeblocks_x64_debug" />
+					<Add library="Bullet3Collision_codeblocks_x64_debug" />
+				</Linker>
 			</Target>
 			<Target title="Release">
 				<Option output="bin/Release/Aortic-Valve" prefix_auto="1" extension_auto="1" />
@@ -28,6 +33,9 @@
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
+					<Add library="BulletCollision_codeblocks_x64_release" />
+					<Add library="LinearMath_codeblocks_x64_release" />
+					<Add library="Bullet3Collision_codeblocks_x64_release" />
 				</Linker>
 			</Target>
 		</Build>
@@ -42,13 +50,14 @@
 			<Add library="GL" />
 			<Add library="GLU" />
 			<Add library="SDL_image" />
-			<Add library="BulletCollision_codeblocks_x64_release" />
-			<Add library="LinearMath_codeblocks_x64_release" />
-			<Add library="Bullet3Collision_codeblocks_x64_release" />
 			<Add directory="/home/alex/Desktop/prog/C++-prog/Bullet/BulletTrainig/bullet3-2.88/bin" />
 		</Linker>
+		<Unit filename="include/NetCollisionShape.h" />
+		<Unit filename="include/NetConcaveCollisionAlgorithm.h" />
+		<Unit filename="include/NetNetCollisionAlgorithm.h" />
 		<Unit filename="include/Net_Wraper.h" />
 		<Unit filename="include/Solver.h" />
+		<Unit filename="include/World.h" />
 		<Unit filename="include/ani_lin_stress.h" />
 		<Unit filename="include/bound-box.h" />
 		<Unit filename="include/camera.h">
@@ -71,8 +80,15 @@
 		<Unit filename="include/spring.h" />
 		<Unit filename="include/stress-interface.h" />
 		<Unit filename="include/stress.h" />
+		<Unit filename="src/NetCollisionShape.cpp">
+			<Option target="&lt;{~None~}&gt;" />
+		</Unit>
+		<Unit filename="src/NetConcaveCollisionAlgorithm.cpp" />
+		<Unit filename="src/NetNetCollisionAlgorithm.cpp" />
 		<Unit filename="src/Net_Wraper.cpp" />
 		<Unit filename="src/Solver.cpp" />
+		<Unit filename="src/StaticCollisionAlgorithm.cpp" />
+		<Unit filename="src/World.cpp" />
 		<Unit filename="src/ani_lin_stress.c">
 			<Option compilerVar="CPP" />
 		</Unit>

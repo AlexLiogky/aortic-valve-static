@@ -4,6 +4,11 @@
 #include "nets.h"
 #include <vector>
 #include "Net_Wraper.h"
+#include "BulletCollision/CollisionShapes/btCollisionShape.h"
+#include "BulletCollision/CollisionShapes/btTriangleIndexVertexArray.h"
+#include "BulletCollision/CollisionShapes/btBvhTriangleMeshShape.h"
+#include "BulletCollision/CollisionDispatch/btCollisionObject.h"
+#include "StaticCollisionAlgorithm.h"
 
 using namespace std;
 
@@ -17,6 +22,10 @@ public:
 
 private:
     void set_initial_solving_params();
+    void convert_net_to_btTriangleMesh(const net_t& st);
+    void findSoftCollisions();
+    void findRigidCollisions();
+    void solveStaticCollision(btCollisionObject* b0, Net_Wraper* b1);
 protected:
     double predictMotion();
     void findCollisions();
@@ -27,6 +36,7 @@ private:
     nets_t m_static_nets;
     nets_t m_union_nets;
     std::vector<Net_Wraper*> m_collision;
+    std::vector<btCollisionObject*> m_static_col;
     wrld_cnd_t m_conditions;
     solver_t m_solver_data;
     statistic_t m_statistic;

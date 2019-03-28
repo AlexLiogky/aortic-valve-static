@@ -4,8 +4,13 @@
 #include "nets.h"
 #include "BulletCollision/BroadphaseCollision/btDbvt.h"
 #include "LinearMath/btAlignedObjectArray.h"
+#include "BulletCollision/CollisionDispatch/btCollisionObject.h"
+#include "BulletSoftBody/btSparseSDF.h"
 
-class Net_Wraper
+btVector3 p2Bt (const point_t& p);
+point_t Bt2p (const btVector3& p);
+
+class Net_Wraper : public btCollisionObject
 {
 
 public:
@@ -18,6 +23,16 @@ public:
                 const btDbvtNode* lface) override;
     };
 
+
+    struct ColliderStatic : public btDbvt::ICollide
+    {
+        Net_Wraper* psb;
+        btVector3 m_triangle[3];
+        double mrg;
+
+        virtual void Process (const btDbvtNode* leaf) override;
+    };
+
 struct SContact
 	{
 		node_t* m_node;         // Node
@@ -28,8 +43,17 @@ struct SContact
 		double m_cfm[2];        // Constraint force mixing
 	};
 
+struct RContact
+	{
+		node_t* m_node;         // Node
+		point_t m_proj;         // Projection
+		point_t m_normal;       // Normal
+		double m_margin;        // Margin
+	};
+
 typedef btAlignedObjectArray<btDbvtNode*> tDbvtArray;
 typedef btAlignedObjectArray<SContact> tSContactArray;
+typedef btAlignedObjectArray<RContact> tRContactArray;
 
 public:
         Net_Wraper(net_t net, double P, double delta);
@@ -45,14 +69,24 @@ public:
             m_delta = net.m_delta;
         }*/
         void CollisionHandler(Net_Wraper* psb);
+        void CollisionHandler(const btCollisionObject* pco, btVector3* triangle);
         double getMargin() { return m_mrg; }
         double computeFreeNexts();
         void updateCollisionInfo();
         static void solveSContacts(Net_Wraper* body);
+        static void solveRContacts(Net_Wraper* body);
+        virtual void getAabb(btVector3& aabbMin, btVector3& aabbMax) const
+        {
+            aabbMin = m_bounds[0];
+            aabbMax = m_bounds[1];
+        }
+        void updateBounds();
 
-
+public:
+    btSparseSdf<3> m_sparsesdf;
 private:
     tSContactArray m_scontacts;        // Soft contacts
+    tRContactArray m_rcontacts;
     tDbvtArray m_nleaf;
     tDbvtArray m_fleaf;
     btDbvt m_ndbvt;                    // Nodes tree
@@ -61,8 +95,8 @@ private:
 	double m_mrg = 0.2;
 	double m_P;
 	double m_delta;
+public:
+	btVector3 m_bounds[2];
 };
-
-btVector3 p2Bt (point_t p);
 
 #endif // NET_WRAPER_H

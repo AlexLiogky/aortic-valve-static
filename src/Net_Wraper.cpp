@@ -1,7 +1,9 @@
+#include "NetCollisionShape.h"
 #include "Net_Wraper.h"
 #include "computation.h"
 
-btVector3 p2Bt (point_t p){ return btVector3(p.coord[0], p.coord[1],p.coord[2]); }
+btVector3 p2Bt (const point_t& p){ return btVector3(p.coord[0], p.coord[1],p.coord[2]); }
+point_t Bt2p (const btVector3& p){ return point_t_get_point(p.x(), p.y(), p.z()); }
 
 static inline btDbvtVolume VolumeOf(const elem_t* f,
 									double margin)
@@ -26,11 +28,49 @@ Net_Wraper::Net_Wraper(net_t net, double P, double delta) : m_net{net}, m_P{P}, 
 	}
 
 	m_fleaf.resize(m_net.elems.count);
-	for (int i = 0; i < m_net.elems.count; ++i)
+	for (unsigned int i = 0; i < m_net.elems.count; ++i)
 	{
 		elem_t* f = m_net.elems.elems[i];
 		m_fleaf[i] = m_fdbvt.insert(VolumeOf(f, 0), f);
 	}
+
+    m_worldTransform.setIdentity();                                                 ////////////neccesary?
+	m_sparsesdf.Initialize();
+	m_sparsesdf.Reset();
+	m_collisionShape = new NetCollisionShape(this);
+	m_collisionShape->setMargin(m_mrg);
+	m_collisionFlags &= ~CF_STATIC_OBJECT;
+	updateBounds();
+}
+
+void Net_Wraper::updateBounds(){
+   /* m_bounds[0] = m_bounds[1] = m_net.vrtx.nodes[0]->coord;
+    for (int i = 1, ni = m_net.vrtx.count; i < ni; ++i)
+    {
+        point_t& p = m_net.vrtx.nodes[i]->coord;
+        for (int j = 0; j < DIM; ++j)
+        {
+            if (m_bounds[0].coord[j] < p.coord[j]) m_bounds[0].coord[j] = p.coord[j];
+            if (m_bounds[1].coord[j] > p.coord[j]) m_bounds[1].coord[j] = p.coord[j];
+        }
+    }*/
+    if (m_ndbvt.m_root)
+	{
+		const btVector3& mins = m_ndbvt.m_root->volume.Mins();
+		const btVector3& maxs = m_ndbvt.m_root->volume.Maxs();
+		const btScalar csm = getCollisionShape()->getMargin();
+		const btVector3 mrg = btVector3(csm,
+										csm,
+										csm) *
+							  1;  // ??? to investigate...
+		m_bounds[0] = mins - mrg;
+		m_bounds[1] = maxs + mrg;
+	}
+	else
+	{
+		m_bounds[0] = m_bounds[1] = btVector3(0, 0, 0);
+	}
+
 }
 
 double Net_Wraper::computeFreeNexts(){
@@ -66,10 +106,12 @@ void Net_Wraper::updateCollisionInfo(){
     #undef FN_V
 
     m_scontacts.resize(0);
+    m_rcontacts.resize(0);
 
     m_ndbvt.optimizeIncremental(1);
 	m_fdbvt.optimizeIncremental(1);
 
+	updateBounds();
 }
 
 void Net_Wraper::CollisionHandler(Net_Wraper* psb){
@@ -91,6 +133,45 @@ void Net_Wraper::CollisionHandler(Net_Wraper* psb){
     docol.psb[0]->m_ndbvt.collideTT(docol.psb[0]->m_ndbvt.m_root,
                                     docol.psb[1]->m_fdbvt.m_root,
                                     docol);
+    }
+}
+
+void Net_Wraper::CollisionHandler(const btCollisionObject* pco, btVector3* triangle)
+{
+
+    Net_Wraper::ColliderStatic docollide;
+
+    ATTRIBUTE_ALIGNED16(btDbvtVolume) volume;
+    volume = btDbvtVolume::FromPoints(triangle, 3);
+    const btScalar margin = pco->getCollisionShape()->getMargin();
+    volume.Expand(btVector3(margin, margin, margin));
+    docollide.psb = this;
+    for (int i = 0; i < 3; ++i) docollide.m_triangle[i] = triangle[i];
+    docollide.mrg = pco->getCollisionShape()->getMargin();
+
+    m_ndbvt.collideTV(m_ndbvt.m_root, volume, docollide);
+}
+
+void Net_Wraper::ColliderStatic::Process(const btDbvtNode* leaf)
+{
+    node_t* node = (node_t*)leaf->data;
+    btVector3* bttr = m_triangle;
+    point_t n[] = {Bt2p(bttr[0]), Bt2p(bttr[1]), Bt2p(bttr[2])};
+    double d = DBL_MAX;
+    point_t proj = point_to_triangle_projection(node->coord, n, &d);
+
+    const double m = mrg + LEN(DIF(node->next, node->coord));
+    if (d < (m * m))
+    {
+        //const point_t w = point_t_bary_coord(n[0], n[1], n[2], proj);
+        double len = sqrt(d);
+
+        Net_Wraper::RContact c;
+        c.m_normal = SCAL(1.0 / len, DIF(node->coord, proj));
+        c.m_proj = proj;
+        c.m_margin = m;
+        c.m_node = node;
+        psb->m_rcontacts.push_back(c);
     }
 }
 
@@ -137,6 +218,28 @@ point_t BaryEval(point_t a, point_t b , point_t c, point_t w)
     return res;
 }
 
+void Net_Wraper::solveRContacts(Net_Wraper* psb)
+{
+    for (int i = 0, ni = psb->m_rcontacts.size(); i < ni; ++i)
+        {
+            const RContact& c = psb->m_rcontacts[i];
+            const point_t& nr = c.m_normal;
+            const point_t& p = c.m_proj;
+            node_t& n = *c.m_node;
+
+            const point_t vr = DIF(n.next, n.coord);
+            point_t corr = get_zero_point();
+            double dot = DOT(vr, nr);
+            if (dot < 0)
+            {
+                const double j = c.m_margin - (DOT(nr, n.next) - DOT(nr, p));
+                ADD_S(&corr, j, c.m_normal);
+            }
+            //corr -= ProjectOnPlane(vr, nr) * c.m_friction;
+            ADD_S(&n.next, 1, corr);
+        }
+}
+
 void Net_Wraper::solveSContacts(Net_Wraper* psb)
 {
     for (int i = 0, ni = psb->m_scontacts.size(); i < ni; ++i)
@@ -158,7 +261,7 @@ void Net_Wraper::solveSContacts(Net_Wraper* psb)
             double dot = DOT(vr, nr);
             if (dot < 0)
             {
-                const double j = c.m_margin - (DOT(nr, n.coord) - DOT(nr, p));
+                const double j = c.m_margin - (DOT(nr, n.next) - DOT(nr, p));
                 ADD_S(&corr, j, c.m_normal);
             }
             //corr -= ProjectOnPlane(vr, nr) * c.m_friction;
@@ -168,5 +271,7 @@ void Net_Wraper::solveSContacts(Net_Wraper* psb)
             ADD_S(&f.vrts[2]->next, -c.m_cfm[1] * c.m_weights.coord[2], corr);
         }
 }
+
+
 
 

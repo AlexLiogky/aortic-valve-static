@@ -4,17 +4,17 @@
 #include <math.h>
 #include <stdio.h>
 #include "bound-box.h"
- 
+
 //coord(i, j, k, n) -> (i * n_j * n_k + j * n_k + k) * n_n + n
 //coord(n, i, j, k) -> n * n_i * n_j * n_k + i * n_j * n_k + j * n_k + k
 
-static void nets_t_fill_borders(nets_t nets, double res[3][2]){
+void nets_t_fill_borders(nets_t nets, double res[3][2]){
 	int i = 0, j = 0, k = 0;
 	for (i = 0; i < 3; i++){
 		res[i][0] = nets.nets[0].vrtx.nodes[0][0].coord.coord[i];
 		res[i][1] = res[i][0];
 	}
-	
+
 	int nets_c = nets.count;
 	for (i = 0; i < nets_c; i++){
 		net_t net = nets.nets[i];
@@ -48,9 +48,9 @@ static void get_borders(double brds[3][2], box_t box, int res[3]){
 		res[i] = (int)(ceil((brds[i][1] - start.coord[i]) / step));
 		if (res[i] == 0) res[i] = 1;
 	}
-} 
+}
 
-static void extend_borders(double coef, double brds[3][2]){
+void extend_borders(double coef, double brds[3][2]){
 	int i;
 	for (i = 0; i < 3; i++){
 		brds[i][0] = (brds[i][1] + brds[i][0]) / 2 - coef * (brds[i][1] - brds[i][0]) / 2;
@@ -71,15 +71,15 @@ crd_t box_t_get_crd(box_t box, point_t coord, int net_id){
 	int i;
 	for (i = 0; i < 3 ; i++) crd.crd[i] = (int) (floor(shift.coord[i] / box.step));
 	crd.crd[3] = net_id;
-	
+
 	//printf("(%d %d %d %d) ", crd.crd[0], crd.crd[1], crd.crd[2], crd.crd[3]);
-	
+
 	return crd;
 }
 
 void box_t_get_pnt_ids(box_t box, point_t pnt, int ids[3]){
 	point_t shift = point_t_dif(pnt, box.start);
-	for (int i = 0; i < 3 ; i++) 
+	for (int i = 0; i < 3 ; i++)
 		ids[i] = (int) (floor(shift.coord[i] / box.step));
 }
 
@@ -140,7 +140,7 @@ box_t box_t_construct(nets_t nets, double step){
 	nets_t_fill_borders(nets, brds);
 	double ext_coef = 1.1;
 	extend_borders(ext_coef, brds);
-	
+
 	box_t box;
 	point_t start = point_t_get_point(brds[0][0], brds[1][0], brds[2][0]);
 	box.start = start;
@@ -155,8 +155,8 @@ box_t box_t_construct(nets_t nets, double step){
 	int data_size = volume * nets.count;
 	box.data = data_t_construct(data_size, DEFOLT_DATA_ELEM_SIZE);
 	init_static(nets, &box);
-	
-	return box;	
+
+	return box;
 }
 
 void box_t_destruct(box_t* box){
@@ -171,7 +171,7 @@ void box_t_destruct(box_t* box){
 	for (i = 1; i < 3 ; i++)
 		res = (int) floor(shift.coord[i] / box.step) + box.borders[i] * res;
 	res = box.nets_cnt * res + net_id;
-	
+
 	return res;
 }*/
 
@@ -208,7 +208,7 @@ static void triangle_fill_borders(point_t triangle[3], double res[3][2]){
 		res[i][0] = triangle[0].coord[i];
 		res[i][1] = res[i][0];
 	}
-	
+
 	for (int j = 1; j < 3; j++)
 		for (int i = 0; i < 3; i++){
 			res[i][0] = (res[i][0] < triangle[j].coord[i]) ? res[i][0] : triangle[j].coord[i];
@@ -236,13 +236,13 @@ int box_unit_intersect_triangle(point_t unit, point_t step, point_t triangle[5])
 		for (int j = 0; j < 3; j++){
 			double dif = triangle[i].coord[j] - unit.coord[j];
 			flag *= (dif >= 0) && (dif < step.coord[j]);
-		} 
+		}
 		if (flag) return 1;
 		if (i == 2) i++;
 	}
-	
+
 	//point_t shift = {};
-	
+
 	if (INT(0, 0, 0, 0, 0, 1) || INT(0, 0, 0, 0, 1, 0) || INT(0, 0, 0, 1, 0, 0))
 		return 1;
 	if ( INT(0, 0, 1, 0, 1, 0) || INT(0, 0, 1, 1, 0, 0)) return 1;
@@ -250,7 +250,7 @@ int box_unit_intersect_triangle(point_t unit, point_t step, point_t triangle[5])
 	if (INT(1, 0, 0, 0, 0, 1) || INT(1, 0, 0, 0, 1, 0)) return 1;
 	if (INT(0, 1, 1, 1, 0, 0) || INT(1, 1, 0, 0, 0, 1) || INT(1, 0, 1, 0, 1, 0))
 		return 1;
-	
+
 	return 0;
 }
 #undef NODE
@@ -290,7 +290,7 @@ int set_exact_elem_to_box(box_t* box, int bar, elem_t elem){ //не провер
 			add_elem_to_data(box[0].data, elem.id, b_coord);
 		}
 	}
-	
+
 	return 1;
 }
 
@@ -336,11 +336,11 @@ void recreate_box(nets_t nets, box_t* box, crd_t crd){
 	double step = box[0].step;
 	int dyn_nets_cnt = box[0].dyn_nets_cnt;
 	box_t_destruct(box);
-	
+
 	box[0].start = start;
 	box[0].step = step;
 	get_borders(brds, box[0], box[0].borders);
-	
+
 	int volume = 1, i;
 	for (i = 0; i < 3; i++)
 		volume *= box[0].borders[i];
@@ -368,7 +368,7 @@ void box_t_dump(box_t box){
 	printf("y: (0 %d) "  , box.borders[1]);
 	printf("z: (0 %d) \n", box.borders[2]);
 	data_t_dump(box.data);
-	printf("}\n");	
+	printf("}\n");
 }
 
 
@@ -376,7 +376,7 @@ void box_t_dump(box_t box){
 curcrd.crd[X] = pnt_crd.crd[X] + ID;						\
 if (!(curcrd.crd[X] >= 0 && curcrd.crd[X] < box.borders[X]))\
 	continue
-	
+
 void box_t_local_point_to_net_projection(box_t box, point_t point, net_t net, int net_id, double* sqr_distance){
 	crd_t pnt_crd = box_t_get_crd(box, point, net_id), curcrd;
 	curcrd.crd[3] = net_id;

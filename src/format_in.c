@@ -155,7 +155,7 @@ net_t read_net_from_stl(char* file_name){
 	FILE* fp = fopen (file_name, "rb");
 	int len = file_len(fp);
 	char* buffer = (char*)calloc(len, sizeof(char));
-	if (fread (buffer, len, sizeof (char), fp) < len)
+	if ((int)fread (buffer, len, sizeof (char), fp) < len)
         perror("Can't read stl file into buffer "), exit(-1);
 	fclose(fp);
 
