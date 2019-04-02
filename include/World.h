@@ -29,6 +29,7 @@ public:
 private:
     void set_initial_solving_params();
     void convert_net_to_btTriangleMesh(net_t& st);
+    void _convert_net_to_btTriangleMesh(net_t st);
     //void findSoftCollisions();
     //void findRigidCollisions();
     //void solveStaticCollision(btCollisionObject* b0, Net_Wraper* b1);

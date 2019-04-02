@@ -8,7 +8,7 @@
 ///For each triangle in the concave mesh that overlaps with the AABB of a soft body (m_softBody), processTriangle is called.
 class Net_WraperTriangleCallback : public btTriangleCallback
 {
-	Net_Wraper* m_softBody;
+	NetObject* m_softBody;
 	const btCollisionObject* m_triBody;
 
 	btVector3 m_aabbMin;
@@ -25,7 +25,7 @@ public:
 
 	//	btPersistentManifold*	m_manifoldPtr;
 
-	Net_WraperTriangleCallback(Net_Wraper* body0, const btCollisionObject* body1):
+	Net_WraperTriangleCallback(NetObject* body0, const btCollisionObject* body1):
         m_softBody{body0},
         m_triBody{body1}
     {

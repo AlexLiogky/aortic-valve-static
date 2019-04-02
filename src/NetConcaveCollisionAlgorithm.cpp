@@ -28,7 +28,7 @@ void NetConcaveCollisionAlgorithm::processCollision(const btCollisionObjectWrapp
 NetTriangleCallback::NetTriangleCallback(btDispatcher* dispatcher, const btCollisionObjectWrapper* body0Wrap, const btCollisionObjectWrapper* body1Wrap, bool isSwapped) : m_dispatcher(dispatcher),
 																																														 m_dispatchInfoPtr(0)
 {
-	m_softBody = (isSwapped ? (Net_Wraper*)body1Wrap->getCollisionObject() : (Net_Wraper*)body0Wrap->getCollisionObject());
+	m_softBody = (isSwapped ? (NetObject*)body1Wrap->getCollisionObject() : (NetObject*)body0Wrap->getCollisionObject());
 	m_triBody = isSwapped ? body0Wrap->getCollisionObject() : body1Wrap->getCollisionObject();
 
 	clearCache();
@@ -41,7 +41,7 @@ void NetTriangleCallback::clearCache()
 		btTriIndex* tmp = m_shapeCache.getAtIndex(i);
 		btAssert(tmp);
 		btAssert(tmp->m_childShape);
-		m_softBody->m_sparsesdf.RemoveReferences(tmp->m_childShape);  //necessary?
+		//m_softBody->m_sparsesdf.RemoveReferences(tmp->m_childShape);  //necessary?
 		delete tmp->m_childShape;
 	}
 	m_shapeCache.clear();

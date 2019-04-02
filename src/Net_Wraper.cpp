@@ -1,6 +1,12 @@
 #include "NetCollisionShape.h"
 #include "Net_Wraper.h"
 #include "computation.h"
+#include <array>
+#include <vector>
+#include <algorithm>
+#include <iostream>
+#include <assert.h>
+#include "NetSpliter.h"
 
 btVector3 p2Bt (const point_t& p){ return btVector3(p.coord[0], p.coord[1],p.coord[2]); }
 point_t Bt2p (const btVector3& p){ return point_t_get_point(p.x(), p.y(), p.z()); }
@@ -17,14 +23,13 @@ static inline btDbvtVolume VolumeOf(const elem_t* f,
 	return (vol);
 }
 
-Net_Wraper::Net_Wraper(net_t net, double P, double delta) : m_net{net}, m_P{P}, m_delta{delta}
+NetObject::NetCollisionObject(net_t net, Net_Wraper* body): m_net{net}, m_body{body}
 {
-
-	m_nleaf.resize(m_net.vrtx.count);
+    m_nleaf.resize(m_net.vrtx.count);
 	for (int i = 0, ni = m_net.vrtx.count; i < ni; ++i)
 	{
 		node_t* n = m_net.vrtx.nodes[i];
-		m_nleaf[i] = m_ndbvt.insert(btDbvtVolume::FromCR(p2Bt(n->coord), m_mrg), n);
+		m_nleaf[i] = m_ndbvt.insert(btDbvtVolume::FromCR(p2Bt(n->coord), m_body->getMargin()), n);
 	}
 
 	m_fleaf.resize(m_net.elems.count);
@@ -35,34 +40,19 @@ Net_Wraper::Net_Wraper(net_t net, double P, double delta) : m_net{net}, m_P{P}, 
 	}
 
     m_worldTransform.setIdentity();                                                 ////////////neccesary?
-	m_sparsesdf.Initialize();
-	m_sparsesdf.Reset();
 	m_collisionShape = new NetCollisionShape(this);
-	m_collisionShape->setMargin(m_mrg);
+	m_collisionShape->setMargin(m_body->getMargin());
 	m_collisionFlags &= ~CF_STATIC_OBJECT;
 	updateBounds();
 }
 
-void Net_Wraper::updateBounds(){
-   /* m_bounds[0] = m_bounds[1] = m_net.vrtx.nodes[0]->coord;
-    for (int i = 1, ni = m_net.vrtx.count; i < ni; ++i)
-    {
-        point_t& p = m_net.vrtx.nodes[i]->coord;
-        for (int j = 0; j < DIM; ++j)
-        {
-            if (m_bounds[0].coord[j] < p.coord[j]) m_bounds[0].coord[j] = p.coord[j];
-            if (m_bounds[1].coord[j] > p.coord[j]) m_bounds[1].coord[j] = p.coord[j];
-        }
-    }*/
-    if (m_ndbvt.m_root)
+void NetObject::updateBounds(){
+    if (m_fdbvt.m_root)
 	{
-		const btVector3& mins = m_ndbvt.m_root->volume.Mins();
-		const btVector3& maxs = m_ndbvt.m_root->volume.Maxs();
+		const btVector3& mins = m_fdbvt.m_root->volume.Mins();
+		const btVector3& maxs = m_fdbvt.m_root->volume.Maxs();
 		const btScalar csm = getCollisionShape()->getMargin();
-		const btVector3 mrg = btVector3(csm,
-										csm,
-										csm) *
-							  1;  // ??? to investigate...
+		const btVector3 mrg = btVector3(csm, csm, csm) * 1;
 		m_bounds[0] = mins - mrg;
 		m_bounds[1] = maxs + mrg;
 	}
@@ -73,21 +63,16 @@ void Net_Wraper::updateBounds(){
 
 }
 
-double Net_Wraper::computeFreeNexts(){
-    if (net_is_static(this->m_net)) return 0;
-    return compute_free_nexts(m_net, m_P, m_delta);
-}
-
-void Net_Wraper::updateCollisionInfo(){
+void NetObject::updateCollisionInfo(){
     ATTRIBUTE_ALIGNED16(btDbvtVolume) vol;
 
     for (int i = 0, ni = m_net.vrtx.count; i < ni; ++i)
 	{
 		node_t* n = m_net.vrtx.nodes[i];
-		vol = btDbvtVolume::FromCR(p2Bt(n->next), m_mrg);
+		vol = btDbvtVolume::FromCR(p2Bt(n->next), getMargin());
 		btDbvtNode* leaf = m_nleaf[i];
 		btVector3 velocity = p2Bt(DIF(n->next, n->coord)) * 3;
-		btScalar margin = m_mrg * (btScalar)0.25;
+		btScalar margin = getMargin() * (btScalar)0.25;
 		m_ndbvt.update(leaf, vol, velocity, margin);
 	}
 
@@ -97,16 +82,13 @@ void Net_Wraper::updateCollisionInfo(){
 			elem_t* f = m_net.elems.elems[i];
 			const point_t v = SCAL(1.0/3, SUM(SUM(FN_V(f, 0), FN_V(f, 1)), FN_V(f, 2)));
 
-			vol = VolumeOf(f, m_mrg);
+			vol = VolumeOf(f, getMargin());
 			m_fdbvt.update(m_fleaf[i],
 						   vol,
 						   p2Bt(v) * 3,
-						   m_mrg * (btScalar)0.25);
+						   getMargin() * (btScalar)0.25);
 		}
     #undef FN_V
-
-    m_scontacts.resize(0);
-    m_rcontacts.resize(0);
 
     m_ndbvt.optimizeIncremental(1);
 	m_fdbvt.optimizeIncremental(1);
@@ -114,9 +96,9 @@ void Net_Wraper::updateCollisionInfo(){
 	updateBounds();
 }
 
-void Net_Wraper::CollisionHandler(Net_Wraper* psb){
-    if (this == psb) return;
-    Net_Wraper::Collider docol;
+void NetObject::CollisionHandler(NetObject* psb){
+    if (this->m_body == psb->m_body) return;
+    NetObject::Collider docol;
     docol.mrg = getMargin() + psb->getMargin();
     /* psb0 nodes vs psb1 faces	*/
     if (!net_is_static(this->m_net)){
@@ -136,10 +118,10 @@ void Net_Wraper::CollisionHandler(Net_Wraper* psb){
     }
 }
 
-void Net_Wraper::CollisionHandler(const btCollisionObject* pco, btVector3* triangle)
+void NetObject::CollisionHandler(const btCollisionObject* pco, btVector3* triangle)
 {
 
-    Net_Wraper::ColliderStatic docollide;
+    NetObject::ColliderStatic docollide;
 
     ATTRIBUTE_ALIGNED16(btDbvtVolume) volume;
     volume = btDbvtVolume::FromPoints(triangle, 3);
@@ -152,7 +134,7 @@ void Net_Wraper::CollisionHandler(const btCollisionObject* pco, btVector3* trian
     m_ndbvt.collideTV(m_ndbvt.m_root, volume, docollide);
 }
 
-void Net_Wraper::ColliderStatic::Process(const btDbvtNode* leaf)
+void NetObject::ColliderStatic::Process(const btDbvtNode* leaf)
 {
     node_t* node = (node_t*)leaf->data;
     btVector3* bttr = m_triangle;
@@ -171,11 +153,11 @@ void Net_Wraper::ColliderStatic::Process(const btDbvtNode* leaf)
         c.m_proj = proj;
         c.m_margin = m;
         c.m_node = node;
-        psb->m_rcontacts.push_back(c);
+        psb->m_body->m_rcontacts.push_back(c);
     }
 }
 
-void Net_Wraper::Collider::Process (const btDbvtNode* lnode,
+void NetObject::Collider::Process (const btDbvtNode* lnode,
                                     const btDbvtNode* lface)
 {
     node_t* node = (node_t*)lnode->data;
@@ -205,9 +187,54 @@ void Net_Wraper::Collider::Process (const btDbvtNode* lnode,
             c.m_weights = w;
             c.m_cfm[0] = ma / ms * 1;
             c.m_cfm[1] = mb / ms * 1;
-            psb[0]->m_scontacts.push_back(c);
+            psb[0]->m_body->m_scontacts.push_back(c);
         }
     }
+}
+
+void Net_Wraper::splitNet2ColObjs(const std::vector<int>& axisSeq, int depth)
+{
+    if (depth)
+    {
+        NetSpliter sp{m_net};
+        sp.split(axisSeq, depth);
+        std::vector<net_t> preBodies = sp.getBodyPreforms();
+        m_objs.reserve(preBodies.size());
+        int cnt = 0;
+        assert(preBodies[1].vrtx.nodes[0]);
+        for (auto& i: preBodies)
+            m_objs.push_back(new NetObject(i, this));
+    }
+    else
+    {
+        m_objs.push_back(new NetObject(m_net, this));
+    }
+}
+
+Net_Wraper::Net_Wraper(net_t net, double P, double delta) : m_net{net}, m_P{P}, m_delta{delta}
+{
+    std::vector<int> axisSeq({1, 1});
+    splitNet2ColObjs(axisSeq, 0);
+}
+
+void Net_Wraper::addObjs2World(btCollisionWorld* wrld)
+{
+    for (int i = 0, bc = m_objs.size(); i < bc; ++i)
+        wrld->addCollisionObject(m_objs[i], btBroadphaseProxy::DefaultFilter, btBroadphaseProxy::AllFilter);
+}
+
+void Net_Wraper::updateCollisionInfo()
+{
+    for (int i = 0, bc = m_objs.size(); i < bc; ++i)
+        m_objs[i]->updateCollisionInfo();
+
+    m_scontacts.resize(0);
+    m_rcontacts.resize(0);
+}
+
+double Net_Wraper::computeFreeNexts(){
+    if (net_is_static(this->m_net)) return 0;
+    return compute_free_nexts(m_net, m_P, m_delta);
 }
 
 point_t BaryEval(point_t a, point_t b , point_t c, point_t w)

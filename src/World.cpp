@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include "bound-box.h"
+#include "NetSpliter.h"
 
 
 World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft):
@@ -18,8 +19,8 @@ World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver
     for (unsigned int i = 0; i < m_dynamic_nets.count; ++i)
         m_collision.push_back(new Net_Wraper(m_dynamic_nets.nets[i], m_conditions.P, m_solver_data.delta));
 
-    point_t_dump(Bt2p(m_collision[0]->m_bounds[0]));
-    point_t_dump(Bt2p(m_collision[0]->m_bounds[1]));
+    //point_t_dump(Bt2p(m_collision[0]->m_bounds[0]));
+    //point_t_dump(Bt2p(m_collision[0]->m_bounds[1]));
 
 
     for (unsigned int i = 0; i < m_static_nets.count; ++i)
@@ -45,7 +46,7 @@ void World::registerCollisionWorld()
     for (auto& i: m_static_col)
         m_collisionWorld->addCollisionObject(i, btBroadphaseProxy::StaticFilter, btBroadphaseProxy::AllFilter ^ btBroadphaseProxy::StaticFilter);
     for (auto& i: m_collision)
-        m_collisionWorld->addCollisionObject(i, btBroadphaseProxy::DefaultFilter, btBroadphaseProxy::AllFilter);
+        i->addObjs2World(m_collisionWorld);
 }
 
 bool inline point_t_in_Aabb(const point_t& p, const double brds[3][2])
@@ -56,7 +57,7 @@ bool inline point_t_in_Aabb(const point_t& p, const double brds[3][2])
     return res;
 }
 
-btTriangleIndexVertexArray* split_net_to_Aabb(const net_t& net, const double brds[3][2])
+btTriangleIndexVertexArray* triangle_index_split_net_to_Aabb(const net_t& net, const double brds[3][2])
 {
     int* vrt_in_Aabb = new int[net.vrtx.count];
     std::fill<int*, int>(vrt_in_Aabb, vrt_in_Aabb + net.vrtx.count, -1);
@@ -112,9 +113,95 @@ btTriangleIndexVertexArray* split_net_to_Aabb(const net_t& net, const double brd
                                             vertStride                                  );
 }
 
+net_t split_net_to_Aabb(const net_t& net, const double brds[3][2])
+{
+    int* vrt_in_Aabb = new int[net.vrtx.count];
+    std::fill<int*, int>(vrt_in_Aabb, vrt_in_Aabb + net.vrtx.count, -1);
+    int totalTriangles = 0;
+    for (int i = 0, nt = net.elems.count; i < nt; ++i)
+    {
+        node_t** e = net.elems.elems[i]->vrts;
+        int check = 0;
+        for (int j = 0; j < 3; ++j)
+        {
+            if (point_t_in_Aabb(e[j]->coord, brds))
+            {
+                vrt_in_Aabb[e[j]->id] = 1;
+                ++check;
+            }
+        }
+        totalTriangles += (check == 3);
+    }
+    int totalVerts = 0;
+    for (int i = 0, nv = net.vrtx.count; i < nv; ++i)
+        totalVerts += (vrt_in_Aabb[i] == 1);
+    vrtx_t vertices = vrtx_t_construct(totalVerts);
+
+    for (int i = 0, j = 0, nv = net.vrtx.count; i < nv; ++i)
+        if (vrt_in_Aabb[i] == 1)
+        {
+            vrt_in_Aabb[i] = j;
+            node_t* node = net.vrtx.nodes[i];
+            const double* p = node->coord.coord;
+            vertices.nodes[j] = node_t_construct(p[0], p[1], p[2], node->h, node->state, j);
+            ++j;
+        }
+
+    //int* triag_indeces = new int[totalTriangles * 3];
+    elems_t triags = elems_t_construct(totalTriangles);
+    for (int i = 0, k = 0, nt = net.elems.count; i < nt; ++i)
+    {
+        elem_t& e = *net.elems.elems[i];
+        bool in = true;
+        for (int j = 0; j < 3; ++j)
+             in &= (vrt_in_Aabb[e.vrts[j]->id] != -1);
+        if (!in) continue;
+        int id0 = vrt_in_Aabb[e.vrts[0]->id];
+        int id1 = vrt_in_Aabb[e.vrts[1]->id];
+        int id2 = vrt_in_Aabb[e.vrts[2]->id];
+        triags.elems[k] = elem_t_construct(vertices.nodes[id0], vertices.nodes[id1], vertices.nodes[id2], k);
+        ++k;
+    }
+
+    delete[] vrt_in_Aabb;
+
+
+    return net_t_get(vertices, triags, springs_t_construct(0));
+}
+
+#include "save-data.h"
 void World::convert_net_to_btTriangleMesh(net_t& st)
 {
-   /* const int totalTriangles = st.elems.count;
+    //_convert_net_to_btTriangleMesh(st);
+    double brds[3][2];
+    nets_t_fill_borders(m_dynamic_nets, brds);
+	double ext_coef = 1.1;
+	extend_borders(ext_coef, brds);
+	net_t net = split_net_to_Aabb(st, brds);
+
+
+    std::vector<int> axisSeq{0, 1, 2, 1};
+    int depth = 0;
+    NetSpliter sp{net};
+    sp.split(axisSeq, depth);
+    std::vector<net_t> preBodies = sp.getBodyPreforms();
+    /*for (int i = 0; i < preBodies.size(); ++i)
+        preBodies[i] = NetSpliter::getExtendedNodeArray(preBodies[i]);
+    nets_t nets = nets_t_get_net(preBodies.size());
+    //nets.nets[0] = preBodies[2];
+    for (int i = 0;  i < preBodies.size(); ++i)
+        nets.nets[i] = preBodies[i];
+    to_stl(nets, (char*)"results/aorta_slice-fa");*/
+    //_convert_net_to_btTriangleMesh(NetSpliter::getExtendedNodeArray(preBodies[2]));
+    //nets.nets[0] = preBodies[4];
+    //to_stl(nets, (char*)"results/aorta_slice4");
+    for (auto i: preBodies)
+        _convert_net_to_btTriangleMesh(NetSpliter::getExtendedNodeArray(i));
+}
+
+void World::_convert_net_to_btTriangleMesh(net_t st)
+{
+    const int totalTriangles = st.elems.count;
     const int totalVerts = st.vrtx.count;
     btVector3* vertices = new btVector3[totalVerts];
     for (int i = 0; i < totalVerts; ++i){
@@ -139,15 +226,15 @@ void World::convert_net_to_btTriangleMesh(net_t& st)
                                                                                     indexStride,
                                                                                     totalVerts,
                                                                                     (btScalar*)&vertices[0].x(),
-                                                                                    vertStride);*/
-    double brds[3][2];
+                                                                                    vertStride);
+    /*double brds[3][2];
     nets_t_fill_borders(m_dynamic_nets, brds);
 	double ext_coef = 1.1;
 	extend_borders(ext_coef, brds);
-	btTriangleIndexVertexArray* indexVertexArrays = split_net_to_Aabb(st, brds);
+	btTriangleIndexVertexArray* indexVertexArrays = triangle_index_split_net_to_Aabb(st, brds);*/
     bool useQuantizedAabbCompression = true;
     btBvhTriangleMeshShape* meshShape = new btBvhTriangleMeshShape(indexVertexArrays, useQuantizedAabbCompression);
-    meshShape->setMargin(0.5);//16);
+    meshShape->setMargin(0.2);//16);
     meshShape->buildOptimizedBvh();
     btCollisionObject* newOb = new btCollisionObject();
     btTransform tr;

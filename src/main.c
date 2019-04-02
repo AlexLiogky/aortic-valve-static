@@ -21,7 +21,7 @@
 #include "sew_leaf.h"
 #include "bound-box.h"
 #include "camera.h"
-#include "Solver.h"
+//#include "Solver.h"
 #include "World.h"
 
 #define RES_STL         "results/sew0"
@@ -340,6 +340,7 @@ void run_comupationT(TT* s){
 	camera_t* cam = camera_t_construct(point_t_get_point(-45.8, -22, 34.6));
 	cam->camPitch = -8;
 	cam->camYaw = 308;
+	//point_t_dump(camera_t_getVector(cam));
 
 	while(running)
 	{
@@ -414,19 +415,20 @@ int main(){
     gettimeofday(&end1, NULL);
 	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
 
-    nets_t dynamic_nets = nets_t_get_net(1);
-    //for (unsigned int i = 0; i < dynamic_nets.count; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
-    dynamic_nets.nets[0] = leaflet.nets[1];
+    nets_t dynamic_nets = nets_t_get_net(3);
+    for (unsigned int i = 0; i < dynamic_nets.count; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
+    //dynamic_nets.nets[0] = leaflet.nets[1];
     nets_t static_nets = nets_t_get_net(1);
     static_nets.nets[0] = leaflet.nets[3];
-    solver_t solver_data = {2e-7, 0.001};
+    solver_t solver_data = {15e-7, 0.001};
     wrld_cnd_t conditions = {80.0};
-    World s(dynamic_nets, static_nets, conditions, solver_data, Allow_shift, Max_shift);
+    World s(dynamic_nets, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift);
     struct timeval start1, end1;
 	gettimeofday(&start1, NULL);
     run_comupationT<World>(&s);
     gettimeofday(&end1, NULL);
 	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
+	to_stl(leaflet, (char*)OUTPUT);
     return 0;
 
 	struct timeval start, end;

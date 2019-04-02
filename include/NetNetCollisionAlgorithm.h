@@ -20,8 +20,8 @@ public:
 
 	virtual void processCollision(const btCollisionObjectWrapper* body0Wrap, const btCollisionObjectWrapper* body1Wrap, const btDispatcherInfo& /*dispatchInfo*/, btManifoldResult* /*resultOut*/)
 	{
-        Net_Wraper* soft0 = (Net_Wraper*)body0Wrap->getCollisionObject();
-        Net_Wraper* soft1 = (Net_Wraper*)body1Wrap->getCollisionObject();
+        NetObject* soft0 = (NetObject*)body0Wrap->getCollisionObject();
+        NetObject* soft1 = (NetObject*)body1Wrap->getCollisionObject();
         soft0->CollisionHandler(soft1);
     }
 

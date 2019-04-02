@@ -15,9 +15,9 @@
 class NetCollisionShape : public btConcaveShape
 {
     public:
-    Net_Wraper* m_body;
+    NetObject* m_body;
 
-    NetCollisionShape(Net_Wraper* backptr)
+    NetCollisionShape(NetObject* backptr)
     {
 		m_shapeType = SOFTBODY_SHAPE_PROXYTYPE;
 		m_body = backptr;

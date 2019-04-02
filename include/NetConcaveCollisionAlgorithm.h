@@ -53,7 +53,7 @@ struct btTriIndex
 ///For each triangle in the concave mesh that overlaps with the AABB of a soft body (m_softBody), processTriangle is called.
 class NetTriangleCallback : public btTriangleCallback
 {
-	Net_Wraper* m_softBody;
+	NetObject* m_softBody;
 	const btCollisionObject* m_triBody;
 
 	btVector3 m_aabbMin;

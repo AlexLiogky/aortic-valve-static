@@ -55,8 +55,10 @@
 		<Unit filename="include/NetCollisionShape.h" />
 		<Unit filename="include/NetConcaveCollisionAlgorithm.h" />
 		<Unit filename="include/NetNetCollisionAlgorithm.h" />
+		<Unit filename="include/NetSpliter.h">
+			<Option target="&lt;{~None~}&gt;" />
+		</Unit>
 		<Unit filename="include/Net_Wraper.h" />
-		<Unit filename="include/Solver.h" />
 		<Unit filename="include/World.h" />
 		<Unit filename="include/ani_lin_stress.h" />
 		<Unit filename="include/bound-box.h" />
@@ -86,7 +88,6 @@
 		<Unit filename="src/NetConcaveCollisionAlgorithm.cpp" />
 		<Unit filename="src/NetNetCollisionAlgorithm.cpp" />
 		<Unit filename="src/Net_Wraper.cpp" />
-		<Unit filename="src/Solver.cpp" />
 		<Unit filename="src/StaticCollisionAlgorithm.cpp" />
 		<Unit filename="src/World.cpp" />
 		<Unit filename="src/ani_lin_stress.c">
