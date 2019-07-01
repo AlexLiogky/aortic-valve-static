@@ -88,7 +88,7 @@ void print_stl_block(int fp, elem_t* elem){
 	write(fp, (char*)&attr, sizeof(uint16_t));
 }
 
-void to_stl(nets_t nets, char* file_name){
+void to_stl(nets_t nets, const char* file_name){
 	char max_file_name[1024] = {};
 	strcat(max_file_name, file_name);
 	strcat(max_file_name + strlen(file_name), ".stl");

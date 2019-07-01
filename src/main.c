@@ -34,6 +34,14 @@
 #define AORTA_IN        "data/aorta/aorta.nts"
 #define BND_IN          "data/aorta/aorta_rec_bnd.bnd"
 
+#include <string>
+#include <sstream>
+#include <fstream>
+#include <iostream>
+using namespace std;
+
+
+std::ofstream gLog;
 
 //######################################################################
 long get_msec_time(struct timeval start, struct timeval end){
@@ -162,38 +170,105 @@ nets_t get_valve_from_system(nets_t system){
 }
 
 void print_nets_statistic(nets_t leaflet, point_t shift){
+                                        set_contact_recognition_resolution(1.1 * 0.1);
 	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-	nets_t curleaflet = get_valve_from_system(leaflet);
+        gLog << "Contact Resolution = " << get_Contact_Resolution()<< endl;
+	nets_t curleaflet = leaflet;//get_valve_from_system(leaflet);
 	print_statistic(curleaflet);
-	double h = nets_t_get_coapt_depth(curleaflet, &shift);
-	double h_c = nets_t_get_coapt_intersect_depth(curleaflet);
-	printf("%s: h = %lg, h_c = %lg\n", OUTPUT, h, h_c);
+	double l_free[10];
+	for (unsigned int i = 0; i < leaflet.count; ++i)
+        l_free[i] = net_t_get_len_free_edge(leaflet.nets[i]);
 
-	for (int i = 0; i < 2; i++){
+	double h = nets_t_get_coapt_depth(curleaflet, &shift);
+	int _pow = -1;
+	                                    set_contact_recognition_resolution(1.1 * 0.35);
+	double h_c = nets_t_get_coapt_intersect_depth(curleaflet, &_pow);
+                                        set_contact_recognition_resolution(1.1 * 0.1);
+    printf("l_free[leaf] = {%lg, %lg, %lg}\n", l_free[0], l_free[1], l_free[2]);
+	printf("%s: h = %lg, h_c = %lg\n", OUTPUT, h, h_c);
+        gLog << "l_free[leaf] = { " <<  l_free[0] << ", " << l_free[1] << ", " << l_free[2] << " }\n";
+        gLog << "0-th level:\n" << " h = " << h << "\n";
+        gLog << " h_c = " << h_c << ", count of central points = " << _pow << endl;
+
+	for (int i = 0; i < 1; i++){
 		curleaflet = create_next_hierarchical_nets(curleaflet);
+            gLog << i + 1 << "-th level:\n";
 		//auto_set_contact_recognition_consts(curleaflet, NULL);
-		double h_c = nets_t_get_coapt_intersect_depth(curleaflet);
+
+		                                    set_contact_recognition_resolution(1.1 * 0.35);
+		double h_c = nets_t_get_coapt_intersect_depth(curleaflet, &_pow);
+		                                    set_contact_recognition_resolution(1.1 * 0.1);
 		double h = nets_t_get_coapt_depth(curleaflet, &shift);
+            gLog << " h = " << h << "\n";
+            gLog << " h_c = " << h_c << ", count of central points = " << _pow << endl;
 		double f_area[3] = {};
 		double S_max = 0, S_min = 0;
 		printf("Compute full leaflet coaptation area:\n");
+            gLog << " Full leaflet coaptation area:\n";
 		for (int i = 0; i < 3; i++){
 			 f_area[i] = net_t_get_coapt_area(curleaflet.nets[i]);
 			 if (i == 0) S_max = f_area[i], S_min = f_area[i];
 			 S_max = (S_max < f_area[i]) ? f_area[i] : S_max;
 			 S_min = (S_min > f_area[i]) ? f_area[i] : S_min;
-			 printf("full area[%d] = %lg\n", i, f_area[i]);
+			 printf("  full area[%d] = %lg\n", i, f_area[i]);
+                gLog << "  full area[" << i << "] = " << f_area[i] << endl;
 		 }
 		double p_area[6] = {};
 		printf("Compute partition leaflet coaptation area:\n");
+            gLog << " Partition leaflet coaptation area:\n";
 		for (int i = 0; i < 3; i++){
 			p_area[2 * i] = nets_t_get_coapt_area_from_to(curleaflet, i%3, (i+1)%3);
 			p_area[2 * i + 1] = nets_t_get_coapt_area_from_to(curleaflet, (i+1)%3, i%3);
 			printf("partion area[%d -> %d] = %lg\n", i%3, (i+1)%3, p_area[2 * i]);
 			printf("partion area[%d -> %d] = %lg\n", (i + 1)%3, (i)%3, p_area[2 * i + 1]);
+                gLog << "  partion area[" << i%3 << " -> " << (i+1)%3 << "] = " << p_area[2 * i] << "\n";
+                gLog << "  partion area[" << (i + 1)%3 << " -> " << (i)%3 << "] = " << p_area[2 * i + 1] << endl;
 		}
+        double h_mid[10];
+        for (unsigned int i = 0; i < leaflet.count; ++i)
+            h_mid[i] = (p_area[2 * ((i + 2) % 3) + 0] + p_area[2 * i + 1]) / l_free[i];
+                gLog << " h_mid[leaf] = { " <<  h_mid[0] << ", " << h_mid[1] << ", " << h_mid[2] << " }\n";
 		printf("%s: h = %lg, h_c = %lg, S_max = %lg, S_min = %lg\n", OUTPUT, h, h_c, S_max, S_min);
+		printf("%s: h_mid[leaf] = { %lg, %lg, %lg }\n", OUTPUT, h_mid[0], h_mid[1], h_mid[2]);
 	}
+}
+
+point_t double_to_rgb(double x, double scale)
+{
+    x /= scale;
+    point_t p = {};
+    if (x < 0)
+    {
+        p.coord[2] = 1;
+        return p;
+    }
+    if (x < 0.5)
+    {
+        p.coord[2] = 1 - 2* x;
+        p.coord[1] = 2 * x;
+        return p;
+    }
+    if (x < 1)
+    {
+        p.coord[1] = 1 - 2* (x - 0.5);
+        p.coord[0] = 2 * (x - 0.5);
+        return p;
+    }
+    p.coord[0] = 1;
+    return p;
+}
+
+point_t get_color(const net_t& net, node_t* node)
+{
+    double r = 0;
+    for (int i = 0, cnt = node->cnt_springs; i < cnt; ++i)
+    {
+        spring_t& spr = *net.springs.springs[node->springs_id[i]];
+        r += fabs(spr.l - spr.l_0) / spr.l_0;
+    }
+    r /= node->cnt_springs;
+    const double max_deform = 0.02;
+    return double_to_rgb(r, max_deform);
 }
 
 void renderSoftBody(const net_t net, point_t fcolor){
@@ -204,6 +279,8 @@ void renderSoftBody(const net_t net, point_t fcolor){
         elem_t* elem = net.elems.elems[i];
         for(int j = 0; j < 3; ++j)
         {
+            fcolor = get_color(net, elem->vrts[j]);
+            glColor3d(fcolor.coord[0], fcolor.coord[1], fcolor.coord[2]);
             point_t x = elem->vrts[j]->coord;
             glVertex3d(x.coord[0], x.coord[1], x.coord[2]);
         }
@@ -271,9 +348,9 @@ void run_comupation(world_t* world){
 		gluPerspective(angle,1280.0/800.0,1,1000);
 	glMatrixMode(GL_MODELVIEW);
 	glEnable(GL_DEPTH_TEST);
-	camera_t* cam = camera_t_construct(point_t_get_point(-45.8, -22, 34.6));
-	cam->camPitch = -8;
-	cam->camYaw = 308;
+	camera_t* cam = camera_t_construct(point_t_get_point(0.800262, -2.22123, 3.87111));//-45.8, -22, 34.6));
+	cam->camPitch = 33.2;//-8;
+	cam->camYaw = 9;//308;
 
 	while(running)
 	{
@@ -324,12 +401,14 @@ void run_comupation(world_t* world){
 }
 
 template<class TT>
-void run_comupationT(TT* s){
+void run_comupationT(TT* s, unsigned int maxtime_sec = 3600 * 24){
     SDL_Init(SDL_INIT_EVERYTHING);
 	SDL_SetVideoMode(1280,800,32,SDL_OPENGL);
-	Uint32 _start;
+	Uint32 _start, start;
 	SDL_Event event;
 	int running=1;
+	int compute=1;
+	int render_mode=1;
 	float angle=45;
 	glClearColor(0,0,0,1);
 	glMatrixMode(GL_PROJECTION);
@@ -337,12 +416,14 @@ void run_comupationT(TT* s){
 		gluPerspective(angle,1280.0/800.0,1,1000);
 	glMatrixMode(GL_MODELVIEW);
 	glEnable(GL_DEPTH_TEST);
-	camera_t* cam = camera_t_construct(point_t_get_point(-45.8, -22, 34.6));
-	cam->camPitch = -8;
-	cam->camYaw = 308;
+	camera_t* cam = camera_t_construct(point_t_get_point(16.0528, 27.7954, -83.2535));//-45.8, -22, 34.6));
+	cam->camPitch = -13;//-8;
+	cam->camYaw = 174;//308;
 	//point_t_dump(camera_t_getVector(cam));
 
-	while(running)
+	start = SDL_GetTicks();
+	unsigned int maxtime_msec = maxtime_sec * 1000;
+	while(running && SDL_GetTicks() - start < maxtime_msec)
 	{
 		_start=SDL_GetTicks();
 		while(SDL_PollEvent(&event))
@@ -365,7 +446,26 @@ void run_comupationT(TT* s){
                         {
                             printf("current possition: "); point_t_dump(cam->loc); printf("\n");
                             printf("camPitch = %lg, camYaw = %lg\n", cam->camPitch, cam->camYaw);
+                            compute ^= 1;
 							break;
+                        }
+                        case SDLK_EQUALS:
+                        {
+                            solver_t data = s->getSolverData();
+                            data.delta /= 0.9;
+                            s->setSolverData(data);
+                            printf("delta = %lg\n", data.delta);
+                                gLog << "new delta = " << data.delta << "\n";
+                            break;
+                        }
+                        case SDLK_MINUS:
+                        {
+                            solver_t data = s->getSolverData();
+                            data.delta *= 0.9;
+                            s->setSolverData(data);
+                            printf("delta = %lg\n", data.delta);
+                                gLog << "new delta = " << data.delta << "\n";
+                            break;
                         }
                         default: break;
 					}
@@ -380,7 +480,8 @@ void run_comupationT(TT* s){
 			}
 		}
 		double dt = 1000.0/60;
-		s->compute_nets_time(dt, 1000);
+		if (compute)
+            s->compute_nets_time(dt, 1000);
         displayT<TT>(s, cam);
 		SDL_GL_SwapBuffers();
 		if(dt>SDL_GetTicks()-_start)
@@ -391,79 +492,182 @@ void run_comupationT(TT* s){
 	camera_t_destruct(cam);
 }
 
+
 //######################################################################
 //######################################################################
-int main(){
-	nets_t aorta = download_aorta((char*)AORTA_IN);
-	printf("elems.count = %u\n", aorta.nets[0].elems.count);
-	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-	point_t shift = point_t_get_point(5, 1, -3.3);
-	nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)INPUT, (char*)INPUT, (char*)INPUT);
+int main(int argc, char* argv[]){
+    std::string directory = "/home/alex/Desktop/MV/valve model-static/Aortic-Valve/src/additional/Haj-mesh/template-20/";
+    std::string filename = "haj-valve";
+    std::string res_fname = filename + "-res";
+    std::string res_dir = "haj-results/";
+    int nres = 1;
+    long int tm = time(NULL);
+    res_fname += "-" + to_string(tm);
+    std::string logfile = filename + "-" + to_string(tm) + "_log.txt";
 
-    /*nets_t dynamic_nets = nets_t_get_net(3);
-    for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
-    nets_t static_nets = nets_t_get_net(1);
-    static_nets.nets[0] = leaflet.nets[3];
-    solver_t solver_data = {2e-7, 0.001};
-    collision_t collision_data = collision_data_t_construct(dynamic_nets, static_nets, 10);
-    wrld_cnd_t conditions = {80.0};
-    world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
-    set_initial_solving_params(world);
-    struct timeval start1, end1;
-	gettimeofday(&start1, NULL);
-    run_comupation(world);
-    gettimeofday(&end1, NULL);
-	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
+    switch (argc)
+    {
+        case 1: break;
+        case 6: logfile = string(argv[5]);
+        case 5: res_dir = string(argv[4]);
+                if (res_dir[res_dir.length() - 1] != '/')
+                    res_dir += "/";
+        case 4: res_fname = string(argv[3]);
+        case 3: filename = string(argv[2]);
+        case 2: directory = string(argv[1]);
+                if (directory[directory.length() - 1] != '/')
+                    directory += "/";
+                break;
+        default:
+            cout << "Wrong input\n";
+            cout << "Usage: " << argv[0] << " <directory_name> <fname> <result file name> <result directory> <logfile name>\n\n";
+            return 0;
+    }
 
-    nets_t dynamic_nets = nets_t_get_net(3);
-    for (unsigned int i = 0; i < dynamic_nets.count; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
-    //dynamic_nets.nets[0] = leaflet.nets[1];
-    nets_t static_nets = nets_t_get_net(1);
-    static_nets.nets[0] = leaflet.nets[3];
-    solver_t solver_data = {15e-7, 0.001};
+    switch (argc)
+    {
+        case 1: cout << "Input directory: " << directory << "\n";
+        case 2: cout << "Input file name: " << filename << "\n";
+        case 3: cout << "Result file name: " << res_fname + "-<#res>\n";
+        case 4: cout << "Result directory: " << res_dir << "\n";
+        case 5: cout << "Logfile: " << res_dir + logfile << "\n";
+        default: break;
+    }
+
+    gLog.open(res_dir + logfile, ios::trunc);
+
+        gLog << "Open " << directory << filename << endl;
+    nets_t test = formated_in((directory + filename).c_str());//"/home/alex/Desktop/MV/valve model-static/Aortic-Valve/src/additional/Labrosse-mesh-generator/sample");
+    for (unsigned int i = 0; i < test.count; ++i)
+        for (unsigned int j = 0; j < test.nets[i].vrtx.count; ++j)
+            test.nets[i].vrtx.nodes[j]->h = 0.3;
+
+        gLog << "Elems per net = " << test.nets[0].elems.count << "\n";
+        gLog << "Nodes per net = " << test.nets[0].vrtx.count << "\n";
+        gLog << "Springs per net = " << test.nets[0].springs.count << "\n";
+        gLog << "Initial full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
+    nets_t static_nets = nets_t_get_net(0);
+    nets_t dynamic_nets = test;
+        //to_stl(dynamic_nets, result.c_str()); return 0;
+
+    nets_t_set_relax_state(test, point_t_get_point(0, 1, 0));
+    precomputation(test);
+    printf("len = %lg\n", net_t_get_len_free_edge(test.nets[0]));
+        gLog << "Initial free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << "\n";
+        gLog << "Fixed len net = " << net_t_get_len_fix_edge(test.nets[0]) << endl;
+    solver_t solver_data = {25e-7, 0.001};
+        gLog << "delta = " << solver_data.delta << "\n";
     wrld_cnd_t conditions = {80.0};
-    World s(dynamic_nets, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift);
+        gLog << "P = " << conditions.P << endl;
+    World s(dynamic_nets, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift, 0.05);
+    update_nets(test);
     struct timeval start1, end1;
-	gettimeofday(&start1, NULL);
-    run_comupationT<World>(&s);
+    gettimeofday(&start1, NULL);
+    run_comupationT<World>(&s, 3600 * 2);
     gettimeofday(&end1, NULL);
-	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
-	to_stl(leaflet, (char*)OUTPUT);
+    printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
+        gLog << "Final full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
+        gLog << "Final free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << endl;
+        gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
+
+    to_stl(dynamic_nets, (res_dir + res_fname + "-" + to_string(nres++)).c_str());
+
+    nets_t dynamic_nets1 = create_next_hierarchical_nets(dynamic_nets);
+    precomputation(dynamic_nets1);
+    World s1(dynamic_nets1, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift, 0.03);
+    update_nets(test);
+    gettimeofday(&start1, NULL);
+    run_comupationT<World>(&s1, 3600);
+    gettimeofday(&end1, NULL);
+    printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
+        gLog << "Final full area per net = " << net_t_get_full_area(dynamic_nets1.nets[0]) << "\n";
+        gLog << "Final free edge len per net = " << net_t_get_len_free_edge(dynamic_nets1.nets[0]) << endl;
+        gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
+
+    to_stl(dynamic_nets1, (res_dir + res_fname + "-" + to_string(nres++)).c_str());
+    print_nets_statistic(dynamic_nets1, point_t_get_point(0, 0, 1));
+
+//    collision_t collision_data = collision_data_t_construct(dynamic_nets, static_nets, 10);
+//    wrld_cnd_t conditions = {80.0};
+//    world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
+//    set_initial_solving_params(world);
+//    struct timeval start1, end1;
+//	gettimeofday(&start1, NULL);
+//    run_comupation(world);
+//    gettimeofday(&end1, NULL);
+//	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
+
     return 0;
-
-	struct timeval start, end;
-	gettimeofday(&start, NULL);
-	double P = 80; //mm Hg
-	double delta = 2e-7;//3e-7;
-	printf("delta = %lg\n", delta);
-	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-	int max_nsteps = 28000, freq = 150;
-	double eps = 0;
-	//compute_nets(leaflet, P, delta, max_nsteps, eps, freq);
-	nets_t curleaflet = get_valve_from_system(leaflet);
-	curleaflet = create_next_hierarchical_nets(curleaflet);
-	int jj = 3;
-	for (unsigned int ii = 0; ii < leaflet.nets[jj].elems.count; ++ii){
-		leaflet.nets[jj].elems.elems[ii]->coef *= -1;
-	}
-	to_stl(leaflet, (char*)OUTPUT);
-	gettimeofday(&end, NULL);
-	//printf("Time of precomputation = %ld ms\n", get_msec_time(start, end));
-
-	print_nets_statistic(leaflet, shift);
-
-	printf("P = %lg, %s\n", P, OUTPUT);
-
-	//world_t_destruct(world);
-	//collision_data_t_destruct(collision_data);
-	nets_t_destruct(curleaflet);
-	nets_t_surfacial_free(dynamic_nets);
-	nets_t_surfacial_free(static_nets);
-	nets_t_surfacial_free(aorta);
-	nets_t_destruct(leaflet);
-
-
-	return 0;
+//	nets_t aorta = download_aorta((char*)AORTA_IN);
+//	printf("elems.count = %u\n", aorta.nets[0].elems.count);
+//	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
+//	point_t shift = point_t_get_point(5, 1, -3.3);
+//	nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)INPUT, (char*)INPUT, (char*)INPUT);
+//
+//    /*nets_t dynamic_nets = nets_t_get_net(3);
+//    for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
+//    nets_t static_nets = nets_t_get_net(1);
+//    static_nets.nets[0] = leaflet.nets[3];
+//    solver_t solver_data = {2e-7, 0.001};
+//    collision_t collision_data = collision_data_t_construct(dynamic_nets, static_nets, 10);
+//    wrld_cnd_t conditions = {80.0};
+//    world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
+//    set_initial_solving_params(world);
+//    struct timeval start1, end1;
+//	gettimeofday(&start1, NULL);
+//    run_comupation(world);
+//    gettimeofday(&end1, NULL);
+//	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
+//
+//    nets_t dynamic_nets = nets_t_get_net(3);
+//    for (unsigned int i = 0; i < dynamic_nets.count; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
+//    //dynamic_nets.nets[0] = leaflet.nets[1];
+//    nets_t static_nets = nets_t_get_net(1);
+//    static_nets.nets[0] = leaflet.nets[3];
+//    solver_t solver_data = {15e-7, 0.001};
+//    wrld_cnd_t conditions = {80.0};
+//    World s(dynamic_nets, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift);
+//    struct timeval start1, end1;
+//	gettimeofday(&start1, NULL);
+//    run_comupationT<World>(&s);
+//    gettimeofday(&end1, NULL);
+//	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
+//	to_stl(leaflet, (char*)OUTPUT);
+//    return 0;
+//
+//	struct timeval start, end;
+//	gettimeofday(&start, NULL);
+//	double P = 80; //mm Hg
+//	double delta = 2e-7;//3e-7;
+//	printf("delta = %lg\n", delta);
+//	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
+//	int max_nsteps = 28000, freq = 150;
+//	double eps = 0;
+//	//compute_nets(leaflet, P, delta, max_nsteps, eps, freq);
+//	nets_t curleaflet = get_valve_from_system(leaflet);
+//	curleaflet = create_next_hierarchical_nets(curleaflet);
+//	int jj = 3;
+//	for (unsigned int ii = 0; ii < leaflet.nets[jj].elems.count; ++ii){
+//		leaflet.nets[jj].elems.elems[ii]->coef *= -1;
+//	}
+//	to_stl(leaflet, (char*)OUTPUT);
+//	gettimeofday(&end, NULL);
+//	//printf("Time of precomputation = %ld ms\n", get_msec_time(start, end));
+//
+//	print_nets_statistic(leaflet, shift);
+//
+//	printf("P = %lg, %s\n", P, OUTPUT);
+//
+//	//world_t_destruct(world);
+//	//collision_data_t_destruct(collision_data);
+//	nets_t_destruct(curleaflet);
+//	nets_t_surfacial_free(dynamic_nets);
+//	nets_t_surfacial_free(static_nets);
+//	nets_t_surfacial_free(aorta);
+//	nets_t_destruct(leaflet);
+//
+//
+//	return 0;
 }
 //######################################################################
 //######################################################################
@@ -473,6 +677,7 @@ int main(){
  */
 
  /* можно отключить update_node у неподвижных вершин */
+ /*центральная кооптация считается неверно, нужно понять, почему*/
 
  /*изменена контактная сила*/
 

@@ -60,7 +60,7 @@ int node_t_check_coaptative_with(node_t* node, unsigned int bar, unsigned int ne
 		coapt_num++;
 		coapt_code /= nets_cnt;
 	} while (coapt_code > 0);
-	
+
 	return coapt * coapt_num;
 }
 
@@ -79,14 +79,14 @@ int node_t_get_coaptative_power(node_t* node, unsigned int nets_cnt){
 		coapt_pow++;
 		coapt_code /= nets_cnt;
 	} while (coapt_code > 0);
-	
+
 	return coapt_pow;
 }
 
 void nets_t_set_coaptative(nets_t nets){				//нужно изменить node_to_net_projection с учётом box_t
 	box_t box = box_t_construct(nets, get_Contact_Resolution());
 	nets_t_update_box(nets, &box);
-	
+
 	unsigned int nets_cnt = nets.count;
 	if (nets_cnt < 2) return;
 	for (unsigned int i = 0; i < nets_cnt; i++){
@@ -97,7 +97,7 @@ void nets_t_set_coaptative(nets_t nets){				//нужно изменить node_t
 			node[0].coaptative = -1;
 		}
 	}
-	
+
 	for (unsigned int i = 0; i < nets_cnt; i++)
 		for (int j = (int)nets_cnt - 1; j >= 0; j--){
 			if (j == (int)i) continue;
@@ -111,7 +111,7 @@ void nets_t_set_coaptative(nets_t nets){				//нужно изменить node_t
 				if (dist < Contact_Resolution) node_t_set_coaptative(node, j, nets_cnt);
 			}
 		}
-		
+
 	box_t_destruct(&box);
 	return;
 }
@@ -181,7 +181,7 @@ vrtx_t net_t_get_free_edge(nets_t nets, int cur, int bar){
 	for(i = 0; i < n_cnt; i++)
 		if (is_free_edge((*(nodes[i])).state) &&  node_t_check_coaptative_with(nodes[i], bar, nets.count))
 			free_edge[n_edge++] = nodes[i];
-	
+
 	vrtx_t vrtx = {n_edge, free_edge};
 	return vrtx;
 }
@@ -209,7 +209,7 @@ int net_t_set_coapt_state(net_t net, int bar, int nets_cnt){
 			if (node[0].coapt_state < (int)node[0].cnt_springs) cnt_vrtx++;
 		}
 	}
-	return cnt_vrtx;	
+	return cnt_vrtx;
 }
 
 vrtx_t net_t_get_bottom_contact_bnd(nets_t nets, int cur, int bar){
@@ -221,7 +221,7 @@ vrtx_t net_t_get_bottom_contact_bnd(nets_t nets, int cur, int bar){
 		node_t* node = net.vrtx.nodes[i];
 		if (node[0].coapt_state < (int)node[0].cnt_springs && node_t_check_coaptative_with(node, bar, nets.count)) bottom_bnd[j++] = node;
 	}
-	
+
 	vrtx_t vrtx = {(unsigned int)j, bottom_bnd};
 	return vrtx;
 }
@@ -232,7 +232,7 @@ double get_distance(node_t* origin, vrtx_t bottom_contact){
 	for (i = 0; i < cnt; i++){
 		node_t* cur = bottom_contact.nodes[i];
 		double cur_dist = SQR_LEN(DIF(cur[0].coord, origin[0].coord));
-		
+
 		if (cur_dist < dist) {
 			dist = cur_dist;
 			id = i;
@@ -256,7 +256,7 @@ int elem_in_field(elem_t* elem, vrtx_t field){
 		flag += node_in_field(vrts[i], field);
 	return (flag == 3);
 }
-	
+
 point_t get_mid_normal(net_t net, vrtx_t field){
 	int cnt = field.count, i, j, flag = 0;
 	point_t normal = get_zero_point();
@@ -265,7 +265,7 @@ point_t get_mid_normal(net_t net, vrtx_t field){
 		int e_cnt = node[0].cnt_elems;
 		for (j = 0; j < e_cnt; j++){
 			elem_t* elem = net.elems.elems[node[0].elems_id[j]];
-			if (elem_in_field(elem, field)){ 
+			if (elem_in_field(elem, field)){
 				normal = point_t_sum(normal, elem[0].or_area);
 				flag++;
 			}
@@ -281,7 +281,7 @@ int check_bnd(net_t net, vrtx_t field, node_t* node){
 	if (is_bnd(node[0].state)) return 1;
 	for (j = 0; j < s_cnt; j++){
 		spring_t* spr = net.springs.springs[node[0].springs_id[j]];
-		if (!node_in_field(spring_t_get_other_end(spr, node), field)) 
+		if (!node_in_field(spring_t_get_other_end(spr, node), field))
 			return 1;
 	}
 	return 0;
@@ -296,16 +296,16 @@ vrtx_t get_field_bnd(net_t net, vrtx_t field){
 		if (check_bnd(net, field, node)) bnd.nodes[j++] = node;
 	}
 	bnd.count = j;
-	
+
 	return bnd;
 }
 
 double get_directed_dist(node_t* node, vrtx_t bound, point_t direction, point_t plate_norm){
-	int cnt = bound.count; 
+	int cnt = bound.count;
 	point_t from = node[0].coord;
 	point_t nearest[2] = {};
 	double r[2] = {2, 3};
-	
+
 	for (int i = 0; i < cnt; i++){
 		node_t* cur = bound.nodes[i];
 		if (cur == node) continue;
@@ -313,22 +313,22 @@ double get_directed_dist(node_t* node, vrtx_t bound, point_t direction, point_t 
 		double cur_r = point_t_scal_mul(or_dir, direction);
 		if (r[0] > cur_r) {
 			r[1] = r[0], nearest[1] = nearest[0];
-			r[0] = cur_r, nearest[0] = cur[0].coord;	
+			r[0] = cur_r, nearest[0] = cur[0].coord;
 		}
-		else if (r[1] > cur_r) 
+		else if (r[1] > cur_r)
 			r[1] = cur_r, nearest[1] = cur[0].coord;
 	}
-	
+
 	point_t line = NORM(DIF(nearest[1], nearest[0]));
 	double coef = DOT(DIF(from, nearest[0]), plate_norm) / DOT(line, plate_norm);
 	point_t res = nearest[0];
-	if (coef >= 1) 
+	if (coef >= 1)
 		res = nearest[1];
 	else if (coef > 0) {
 		SCAL_S(coef, &line);
-		res = SUM(nearest[0], line); 
+		res = SUM(nearest[0], line);
 	}
-	
+
 	double full_dist = LEN(DIF(res, from));
 	return full_dist;
 }
@@ -337,9 +337,9 @@ double net_to_net_get_coapt_directed_depth(nets_t nets, int cur, int bar, point_
 	if (point_t_equal(direction, get_zero_point(), DBL_EPSILON)) return -1;
 	vrtx_t field = get_coapt_field(nets, cur, bar);
 	point_t normal = get_mid_normal(nets.nets[cur], field);
-	point_t plate_norm = NORM(CROSS(direction, normal)); 
+	point_t plate_norm = NORM(CROSS(direction, normal));
 	point_t loc_direction = NORM(DIF(direction, DIR_PROJ(direction, normal)));
-	
+
 	vrtx_t bound = get_field_bnd(nets.nets[cur], field);
 	int i, cnt = bound.count;
 	double dist = 0;
@@ -348,10 +348,10 @@ double net_to_net_get_coapt_directed_depth(nets_t nets, int cur, int bar, point_
 		double cur_dist = get_directed_dist(node, bound, loc_direction, plate_norm);
 		if (cur_dist > dist) dist = cur_dist;
 	}
-	
+
 	free(field.nodes);
 	free(bound.nodes);
-	
+
 	return dist;
 }
 
@@ -367,14 +367,14 @@ double net_to_net_get_coapt_unorient_depth(nets_t nets, int cur, int bar){
 	}
 	free(bottom_contact.nodes);
 	free(upper_contact.nodes);
-	
+
 	return depth;
 }
 
 double net_to_net_get_coapt_depth(nets_t nets, int cur, int bar, point_t* direction){
 	if (direction == NULL)
 		return net_to_net_get_coapt_unorient_depth(nets, cur, bar);
-	
+
 	return net_to_net_get_coapt_directed_depth(nets, cur, bar, *direction);
 }
 
@@ -388,7 +388,7 @@ double nets_t_get_coapt_depth(nets_t nets, point_t* direction){
 		for (unsigned int j = 0; j < nets_cnt; j++){
 			if (j == i) continue;
 			double cur_depth = net_to_net_get_coapt_depth(nets, i, j, direction);
-			
+
 			if (depth < cur_depth){
 				depth = cur_depth;
 				orig = i, bar = j;
@@ -401,19 +401,20 @@ double nets_t_get_coapt_depth(nets_t nets, point_t* direction){
 	return depth;
 }
 
-double nets_t_get_coapt_intersect_depth(nets_t nets){
+double nets_t_get_coapt_intersect_depth(nets_t nets, int* pow){
 	nets_t_set_coaptative(nets);
 	vrtx_t field = get_pow_coapt_field(nets, nets.count - 1);
 	printf("Intersect power is %d\n", field.count);
+	if (pow) *pow = field.count;
 	double sqr_dist = 0;
 	for (unsigned int i = 0; i < field.count; i++)
 		for (unsigned int j = i + 1; j < field.count; j++){
 			double sqr_dist_i_j =point_t_sqr_len(point_t_dif(field.nodes[i][0].coord, field.nodes[j][0].coord));
 			if (sqr_dist_i_j > sqr_dist) sqr_dist = sqr_dist_i_j;
 		}
-	
+
 	free(field.nodes);
-		
+
 	return sqrt(sqr_dist);
 }
 //#############################################################################

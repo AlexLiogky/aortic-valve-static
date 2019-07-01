@@ -5,6 +5,7 @@
 		<Option title="Aortic-Valve" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
+		<Option virtualFolders="include/;" />
 		<Build>
 			<Target title="Debug">
 				<Option output="bin/Debug/Aortic-Valve" prefix_auto="1" extension_auto="1" />
@@ -12,7 +13,6 @@
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
-					<Add option="-std=c++1z" />
 					<Add option="-g" />
 					<Add directory="include" />
 				</Compiler>
@@ -60,7 +60,6 @@
 		</Unit>
 		<Unit filename="include/Net_Wraper.h" />
 		<Unit filename="include/World.h" />
-		<Unit filename="include/ani_lin_stress.h" />
 		<Unit filename="include/bound-box.h" />
 		<Unit filename="include/camera.h">
 			<Option target="&lt;{~None~}&gt;" />
@@ -71,6 +70,7 @@
 		<Unit filename="include/format_in.h" />
 		<Unit filename="include/hermit-splines.h" />
 		<Unit filename="include/intersection.h" />
+		<Unit filename="include/isotrop-stress.h" />
 		<Unit filename="include/nets.h" />
 		<Unit filename="include/node.h" />
 		<Unit filename="include/point.h" />
@@ -90,9 +90,6 @@
 		<Unit filename="src/Net_Wraper.cpp" />
 		<Unit filename="src/StaticCollisionAlgorithm.cpp" />
 		<Unit filename="src/World.cpp" />
-		<Unit filename="src/ani_lin_stress.c">
-			<Option compilerVar="CPP" />
-		</Unit>
 		<Unit filename="src/bound-box.c">
 			<Option compilerVar="CPP" />
 		</Unit>
@@ -115,6 +112,9 @@
 			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/intersection.c">
+			<Option compilerVar="CPP" />
+		</Unit>
+		<Unit filename="src/isotrop-stress.c">
 			<Option compilerVar="CPP" />
 		</Unit>
 		<Unit filename="src/main.c">
@@ -146,6 +146,7 @@
 		</Unit>
 		<Unit filename="src/spring.c">
 			<Option compilerVar="CPP" />
+			<Option virtualFolder="include/" />
 		</Unit>
 		<Extensions>
 			<code_completion />

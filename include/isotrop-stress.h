@@ -6,7 +6,7 @@
 typedef struct stress_t{
 	double sigma1;
 	double sigma2;
-	double sigma3;
+	//double sigma3;
 } stress_t;
 
 #endif

@@ -10,25 +10,26 @@ double node_t_area(net_t net, node_t* node);
 void print_statistic(nets_t nets);
 
 //return depth of coaptation between "cur" and "bar"
-//suppose that depth of coaptation is maximal distance between 
-//points of bottom and the least deviating point of upper bounds from "direction" of coaptation field 
+//suppose that depth of coaptation is maximal distance between
+//points of bottom and the least deviating point of upper bounds from "direction" of coaptation field
 double net_to_net_get_coapt_directed_depth(nets_t nets, int cur, int bar, point_t direction);
 
 //return depth of coaptation between "cur" and "bar"
-//suppose that depth of coaptation is maximal distance between 
+//suppose that depth of coaptation is maximal distance between
 //points of bottom and upper bounds of coaptation field
 double net_to_net_get_coapt_unorient_depth(nets_t nets, int cur, int bar);
 
 //return depth of coaptation between "cur" and "bar"
-//shape function choosing "directed_depth" or "unorient_depth" 
-//depending on "direction" =? NULL 
+//shape function choosing "directed_depth" or "unorient_depth"
+//depending on "direction" =? NULL
 double net_to_net_get_coapt_depth(nets_t nets, int cur, int bar, point_t* direction);
 
 //return middle depth of coaptation
 double nets_t_get_coapt_depth(nets_t nets, point_t* direction);
 
 //return height of central hole in aortic valve
-double nets_t_get_coapt_intersect_depth(nets_t nets);
+//pow is optional out parameter
+double nets_t_get_coapt_intersect_depth(nets_t nets, int* pow);
 
 //return total area of coaptation on "net"
 double net_t_get_coapt_area(net_t net);

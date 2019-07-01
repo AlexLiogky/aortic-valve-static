@@ -23,7 +23,7 @@ static inline btDbvtVolume VolumeOf(const elem_t* f,
 	return (vol);
 }
 
-NetObject::NetCollisionObject(net_t net, Net_Wraper* body): m_net{net}, m_body{body}
+NetObject::NetCollisionObject(net_t net, Net_Wraper* body): m_body{body}, m_net{net}
 {
     m_nleaf.resize(m_net.vrtx.count);
 	for (int i = 0, ni = m_net.vrtx.count; i < ni; ++i)
@@ -200,7 +200,7 @@ void Net_Wraper::splitNet2ColObjs(const std::vector<int>& axisSeq, int depth)
         sp.split(axisSeq, depth);
         std::vector<net_t> preBodies = sp.getBodyPreforms();
         m_objs.reserve(preBodies.size());
-        int cnt = 0;
+        //int cnt = 0;
         assert(preBodies[1].vrtx.nodes[0]);
         for (auto& i: preBodies)
             m_objs.push_back(new NetObject(i, this));
@@ -211,7 +211,7 @@ void Net_Wraper::splitNet2ColObjs(const std::vector<int>& axisSeq, int depth)
     }
 }
 
-Net_Wraper::Net_Wraper(net_t net, double P, double delta) : m_net{net}, m_P{P}, m_delta{delta}
+Net_Wraper::Net_Wraper(net_t net, double P, double delta, double margin) : m_net{net}, m_P{P}, m_delta{delta}, m_mrg{margin}
 {
     std::vector<int> axisSeq({1, 1});
     splitNet2ColObjs(axisSeq, 0);
@@ -253,6 +253,7 @@ void Net_Wraper::solveRContacts(Net_Wraper* psb)
             const point_t& nr = c.m_normal;
             const point_t& p = c.m_proj;
             node_t& n = *c.m_node;
+            if (is_fix(n.state)) continue;
 
             const point_t vr = DIF(n.next, n.coord);
             point_t corr = get_zero_point();
@@ -292,10 +293,14 @@ void Net_Wraper::solveSContacts(Net_Wraper* psb)
                 ADD_S(&corr, j, c.m_normal);
             }
             //corr -= ProjectOnPlane(vr, nr) * c.m_friction;
-            ADD_S(&n.next, c.m_cfm[0], corr);
-            ADD_S(&f.vrts[0]->next, -c.m_cfm[1] * c.m_weights.coord[0], corr);
-            ADD_S(&f.vrts[1]->next, -c.m_cfm[1] * c.m_weights.coord[1], corr);
-            ADD_S(&f.vrts[2]->next, -c.m_cfm[1] * c.m_weights.coord[2], corr);
+            if (is_free(n.state) || is_fix(f.vrts[0]->state) || is_fix(f.vrts[1]->state) || is_fix(f.vrts[2]->state))
+                ADD_S(&n.next, c.m_cfm[0], corr);
+            if(is_free(f.vrts[0]->state)  || is_fix(n.state))
+                ADD_S(&f.vrts[0]->next, -c.m_cfm[1] * c.m_weights.coord[0], corr);
+            if(is_free(f.vrts[1]->state) || is_fix(n.state))
+                ADD_S(&f.vrts[1]->next, -c.m_cfm[1] * c.m_weights.coord[1], corr);
+            if(is_free(f.vrts[2]->state) || is_fix(n.state))
+                ADD_S(&f.vrts[2]->next, -c.m_cfm[1] * c.m_weights.coord[2], corr);
         }
 }
 

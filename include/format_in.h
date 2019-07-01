@@ -8,7 +8,7 @@
 net_t get_net_from_file(FILE* input);
 
 //get nets from txt file where nets saved in specific format
-nets_t formated_in(char* file_name);
+nets_t formated_in(const char* file_name);
 
 //read net from ".stl" file
 net_t read_net_from_stl(char* file_name);

@@ -4,8 +4,10 @@
 #include "bound-box.h"
 #include "NetSpliter.h"
 
+//закомменчена функиция обсчёта
 
-World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft):
+
+World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft, double margin):
     m_dynamic_nets{dynamic_nets},
     m_static_nets{static_nets},
     m_union_nets{create_union_net(dynamic_nets, static_nets)},
@@ -13,20 +15,21 @@ World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver
     m_solver_data{solver_data},
     m_statistic{statistical_data_construct(dynamic_nets)},
     m_allow_shift{drop_thr},
-    m_max_shift{max_shft}
+    m_max_shift{max_shft},
+    m_mrg{margin}
 {
     m_collision.reserve(m_union_nets.count);
     for (unsigned int i = 0; i < m_dynamic_nets.count; ++i)
-        m_collision.push_back(new Net_Wraper(m_dynamic_nets.nets[i], m_conditions.P, m_solver_data.delta));
+        m_collision.push_back(new Net_Wraper(m_dynamic_nets.nets[i], m_conditions.P, m_solver_data.delta, m_mrg));
 
-    //point_t_dump(Bt2p(m_collision[0]->m_bounds[0]));
-    //point_t_dump(Bt2p(m_collision[0]->m_bounds[1]));
+                    //point_t_dump(Bt2p(m_collision[0]->m_bounds[0]));
+                    //point_t_dump(Bt2p(m_collision[0]->m_bounds[1]));
 
 
     for (unsigned int i = 0; i < m_static_nets.count; ++i)
         convert_net_to_btTriangleMesh(m_static_nets.nets[i]);
 
-    //addTestBvh();
+                    //addTestBvh();
 
     registerCollisionWorld();
     set_initial_solving_params();
@@ -234,7 +237,7 @@ void World::_convert_net_to_btTriangleMesh(net_t st)
 	btTriangleIndexVertexArray* indexVertexArrays = triangle_index_split_net_to_Aabb(st, brds);*/
     bool useQuantizedAabbCompression = true;
     btBvhTriangleMeshShape* meshShape = new btBvhTriangleMeshShape(indexVertexArrays, useQuantizedAabbCompression);
-    meshShape->setMargin(0.2);//16);
+    meshShape->setMargin(m_mrg);//16);
     meshShape->buildOptimizedBvh();
     btCollisionObject* newOb = new btCollisionObject();
     btTransform tr;
@@ -248,7 +251,7 @@ void World::_convert_net_to_btTriangleMesh(net_t st)
 void World::addTestBvh()
 {
     const float TRIANGLE_SIZE = 1.0f;
-    static float waveheight = 5.f;
+    //static float waveheight = 5.f;
     btCollisionShape* groundShape = 0;
 	{
 		int i;
@@ -262,7 +265,7 @@ void World::addTestBvh()
 		btVector3* gGroundVertices = new btVector3[totalVerts];
 		int* gGroundIndices = new int[totalTriangles * 3];
 
-		btScalar offset(0);
+		//btScalar offset(0);
 
 		for (i = 0; i < NUM_VERTS_X; i++)
 		{
@@ -374,8 +377,8 @@ void World::compute_nets_time(long double compute_time, int max_its)
         gettimeofday(&end, NULL);
 		if (compute_dif_ms(end, start) >= compute_time - 0.8) break;
 	}
-	double res = statistic_t_get_full_mid_diviation(m_statistic);
-	double rms = res / m_statistic.cnt_nodes;
+	//double res = statistic_t_get_full_mid_diviation(m_statistic);
+	//double rms = res / m_statistic.cnt_nodes;
 	//printf("RMS shift per iter of node = %e mm, relation = %lg, cr = %d / %d\n", rms , res / world->statistic.init_div, crush, i+1);
 	statistic_t_reset(&m_statistic);
 }
@@ -427,3 +430,9 @@ btCollisionAlgorithmCreateFunc* MyCollisionConfiguration::getCollisionAlgorithmC
     return btDefaultCollisionConfiguration::getCollisionAlgorithmCreateFunc(proxyType0, proxyType1);;
 }
 
+void World::setSolverData(solver_t data)
+{
+    m_solver_data = data;
+    for (auto& i: m_collision)
+        i->setDelta(data.delta);
+}

@@ -1,8 +1,11 @@
 #include <math.h>
+#include <assert.h>
 #include "isotrop-stress.h"
 
-const double _E_0 = 100000;		//Pa
-const double _E_1 = 706000;	//Pa
+///жёсткости увеличены в 100 раз
+
+const double _E_0 = 1000000;//10000000;		//Pa в 100
+const double _E_1 = 1000000;//70600000;	//Pa в 10
 const double _Eps_lim = 0.18;
 
 stress_t stress_t_construct(point_t spr_direction, point_t* fiber_direction, double coef){

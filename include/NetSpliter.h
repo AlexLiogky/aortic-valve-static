@@ -70,7 +70,7 @@ public:
         m_f_in.reserve(net.elems.count);
         for (int i = 0, fc = net.elems.count; i < fc; ++i)
         {
-            m_faces.push_back(new SpFace{std::array<int, 3>({es[i]->vrts[0]->id, es[i]->vrts[1]->id, es[i]->vrts[2]->id}), std::array<bool, 3>({true, true, true}), es[i]});
+            m_faces.push_back(new SpFace{std::array<int, 3>({(int)es[i]->vrts[0]->id, (int)es[i]->vrts[1]->id, (int)es[i]->vrts[2]->id}), std::array<bool, 3>({true, true, true}), es[i]});
             m_f_in.push_back(true);
             /*std::array<3, point_t*>* face = new std::array<3, point_t*>;
             for (int j = 0; j < 3; ++j)
@@ -81,7 +81,7 @@ public:
 
     void split(const std::vector<int>& axisSeq, int depth)
     {
-        SpBounds b = {0, m_faces.size(), 0, m_nodes.size()};
+        SpBounds b = {0, (int)m_faces.size(), 0, (int)m_nodes.size()};
         m_NodeArrOffs.push_back(0);
         m_NodeArrOffs.push_back(m_nodes.size());
         m_FaceArrOffs.push_back(0);
@@ -105,7 +105,7 @@ public:
                 n.nodes[j - m_NodeArrOffs[i]] = m_nodes[j]->backPtr;
 
             springs_t doomy = springs_t_construct(0);
-            net_t net = net_t_get(n, e, doomy);
+            //net_t net = net_t_get(n, e, doomy);
             bodies.push_back(net_t_get(n, e, doomy));
         }
 
@@ -172,14 +172,14 @@ private:
 
         SpBounds b1 = {bnds.f_st, jjj, bnds.n_st, mid};
         SpBounds b2 = {jjj, bnds.f_nd, mid, bnds.n_nd};
-        _split(b1, axisSeq, depth - (step == axisSeq.size() - 1), (step + 1) % axisSeq.size());
-        _split(b2, axisSeq, depth - (step == axisSeq.size() - 1), (step + 1) % axisSeq.size());
+        _split(b1, axisSeq, depth - (step == (int)axisSeq.size() - 1), (step + 1) % axisSeq.size());
+        _split(b2, axisSeq, depth - (step == (int)axisSeq.size() - 1), (step + 1) % axisSeq.size());
     }
 public:
     static net_t getExtendedNodeArray(const net_t net)
     {
         std::map<node_t*, int> nd_id;
-        for (int i = 0, j = 0; i < net.elems.count * 3; ++i)
+        for (int i = 0, j = 0; i < (int)net.elems.count * 3; ++i)
         {
             node_t* node = net.elems.elems[i/3]->vrts[i%3];
             j += nd_id.insert(std::make_pair(node, j)).second;
@@ -195,7 +195,7 @@ public:
         }
 
         elems_t e = elems_t_construct(net.elems.count);
-        for (int i = 0; i < net.elems.count; ++i)
+        for (int i = 0; i < (int)net.elems.count; ++i)
         {
             int id0 = nd_id.find(net.elems.elems[i]->vrts[0])->second;
             int id1 = nd_id.find(net.elems.elems[i]->vrts[1])->second;

@@ -34,6 +34,7 @@ net_t get_net_from_file(FILE* input){
 		double n1, n2, n3;
 		if (fscanf (input, "%d %d %d %lg %lg %lg", &x, &y, &z, &n1, &n2, &n3)== EOF)
             perror("Can't read element data "), exit(-1);
+
 		elems.elems[i] = elem_t_construct(vrtx.nodes[x - 1], vrtx.nodes[y - 1], vrtx.nodes[z - 1], i);
 		//(*((*elems).elems[i])).id = i;
 		if (DOT((*(elems).elems[i]).or_area, *(point_t_construct(n1, n2, n3))) < 0) {
@@ -46,7 +47,7 @@ net_t get_net_from_file(FILE* input){
 	return net;
 }
 
-nets_t formated_in(char* file_name){
+nets_t formated_in(const char* file_name){
 	FILE* input = fopen (file_name, "r");
 	unsigned int count_nets = 0, i;
 	if (fscanf (input, "%u", &count_nets) == EOF)

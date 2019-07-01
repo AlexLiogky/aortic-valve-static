@@ -85,7 +85,7 @@ typedef btAlignedObjectArray<RContact> tRContactArray;
 typedef btAlignedObjectArray<NetCollisionObject*> ObjArray;
 
 public:
-        Net_Wraper(net_t net, double P, double delta);
+        Net_Wraper(net_t net, double P, double delta, double margin = 0.1);
 
         double getMargin() { return m_mrg; }
         double computeFreeNexts();
@@ -93,6 +93,7 @@ public:
         void updateCollisionInfo();
         static void solveSContacts(Net_Wraper* body);
         static void solveRContacts(Net_Wraper* body);
+        void setDelta(double delta) { m_delta = delta; }
 private:
         void splitNet2ColObjs(const std::vector<int>& axisSeq, int depth);
 
@@ -101,7 +102,7 @@ private:
     tSContactArray m_scontacts;        // Soft contacts
     tRContactArray m_rcontacts;
 	net_t m_net;
-	double m_mrg = 0.2;
+	double m_mrg = 0.1;
 	double m_P;
 	double m_delta;
 };
