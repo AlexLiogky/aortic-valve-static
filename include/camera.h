@@ -1,6 +1,7 @@
 #ifndef CAMERA_H_INCLUDED
 #define CAMERA_H_INCLUDED
 
+#define _USE_MATH_DEFINES
 #include <math.h>
 #include <SDL/SDL.h>
 #include <GL/gl.h>
@@ -8,6 +9,9 @@
 
 #include "point.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct camera_t{
     point_t loc;
@@ -37,5 +41,10 @@ point_t camera_t_getVector(camera_t* cam);
 void camera_t_mouseIn(camera_t* cam, int b);
 
 int camera_t_isMouseIn(camera_t* cam);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif // CAMERA_H_INCLUDED

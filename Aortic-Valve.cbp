@@ -5,7 +5,6 @@
 		<Option title="Aortic-Valve" />
 		<Option pch_mode="2" />
 		<Option compiler="gcc" />
-		<Option virtualFolders="include/;" />
 		<Build>
 			<Target title="Debug">
 				<Option output="bin/Debug/Aortic-Valve" prefix_auto="1" extension_auto="1" />
@@ -50,8 +49,11 @@
 			<Add library="GL" />
 			<Add library="GLU" />
 			<Add library="SDL_image" />
+			<Add library="gsl" />
+			<Add library="gslcblas" />
 			<Add directory="/home/alex/Desktop/prog/C++-prog/Bullet/BulletTrainig/bullet3-2.88/bin" />
 		</Linker>
+		<Unit filename="include/MinEnergyDeformator.h" />
 		<Unit filename="include/NetCollisionShape.h" />
 		<Unit filename="include/NetConcaveCollisionAlgorithm.h" />
 		<Unit filename="include/NetNetCollisionAlgorithm.h" />
@@ -82,6 +84,7 @@
 		<Unit filename="include/spring.h" />
 		<Unit filename="include/stress-interface.h" />
 		<Unit filename="include/stress.h" />
+		<Unit filename="src/MinEnergyDeformator.cpp" />
 		<Unit filename="src/NetCollisionShape.cpp">
 			<Option target="&lt;{~None~}&gt;" />
 		</Unit>
@@ -91,62 +94,59 @@
 		<Unit filename="src/StaticCollisionAlgorithm.cpp" />
 		<Unit filename="src/World.cpp" />
 		<Unit filename="src/bound-box.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/camera.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/computation.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/data.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/elem.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/format_in.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/hermit-splines.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/intersection.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/isotrop-stress.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
-		<Unit filename="src/main.c">
-			<Option compilerVar="CPP" />
-		</Unit>
+		<Unit filename="src/main.cpp" />
 		<Unit filename="src/nets.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/node.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/point.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/postcomputation.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/precomputation.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/save-data.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/separate.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/sew_leaf.c">
-			<Option compilerVar="CPP" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Unit filename="src/spring.c">
-			<Option compilerVar="CPP" />
-			<Option virtualFolder="include/" />
+			<Option compilerVar="CC" />
 		</Unit>
 		<Extensions>
 			<code_completion />

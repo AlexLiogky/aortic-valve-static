@@ -109,7 +109,7 @@ void to_stl(nets_t nets, const char* file_name){
 }
 
 //############save_nets#################################################
-void save_nets_to_file(nets_t nets, char* file_name){
+void save_nets_to_file(nets_t nets, const char* file_name){
 	char max_file_name[1024] = {};
 	strcat(max_file_name, file_name);
 	strcat(max_file_name + strlen(file_name), ".nts");

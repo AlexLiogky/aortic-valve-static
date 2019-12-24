@@ -5,11 +5,26 @@
 #include "bound-box.h"
 #include <sys/time.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define FLAG_REL 1
 extern double Contact_Force_Const1;
 extern double Contact_Force_Const2;
+extern double gt_elastic;
+
+enum ElasticModels{
+    EMOD_MSM,
+    EMOD_TRQS,
+    EMOD_NEOGOOK,
+    EMOD_REINFORCING,
+    EMOD_COUNT
+};
 
 //############computation###############################################
+void set_elastic_model(int type);
+
 //set specific collision force
 void set_contact_force_consts(double k1, double k2);
 
@@ -112,8 +127,9 @@ typedef struct collision_data_t{
 } collision_t;
 
 typedef struct solver_data_t{
-    double delta;       //coefficient converting force into shift
-    double eps;         //stop condition
+    double delta;           //coefficient converting force into shift
+    double eps;             //stop condition
+    int ElasticModelType;   //number of used elastic model
 } solver_t;
 
 typedef struct statistical_data_t{
@@ -166,5 +182,10 @@ void compute_nets_time(long double compute_time, world_t* world, int max_its);
 
 void relaxation(nets_t nets, double coef);
 //############computation###############################################
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

@@ -62,6 +62,13 @@ point_t point_t_add_scale(point_t origin, double coef, point_t addition){
 	return res;
 }
 
+point_t point_t_scale_add_scale(double coef1, point_t p1, double coef2, point_t p2){
+    point_t res;
+    for (int i = 0; i < DIM; i++)
+        res.coord[i] = coef1 * p1.coord[i] + coef2 * p2.coord[i];
+    return res;
+}
+
 void point_t_add_scale_self(point_t* origin, double coef, point_t addition){
 	for (int i = 0; i < DIM; i++)
 		origin[0].coord[i] = origin[0].coord[i] + coef * addition.coord[i];
@@ -469,5 +476,15 @@ void line_t_dump(line_t line){
 	for (int i = 0; i < line.pnt_cnt; i++)
 		{printf("%d: ", i); point_t_dump(line.line[i]);}
 	printf("}\n");
+}
+
+//return (p_2 - p_1)^\ortho
+point_t get_ortho_vector(point_t p1, point_t p2, point_t p3)
+{
+    point_t n = NORM(point_t_or_area(p1, p2, p3));
+    point_t ortho = CROSS(n, DIF(p2, p1));
+    if (DOT(DIF(p3, p1), ortho) < 0) SCAL_S(-1, &ortho);
+
+    return ortho;
 }
 

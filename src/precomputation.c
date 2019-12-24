@@ -1,6 +1,10 @@
 #include "precomputation.h"
 #include <stdlib.h>
 
+#ifndef M_PI
+    #define M_PI 3.141592653589793238462643383279502884
+#endif
+
 double Contact_Resolution = 1.5;
 double Contact_Const = 0.7;
 double Min_Contact_Const = 0.5;
@@ -9,6 +13,7 @@ double Allow_shift = 0.5e-2 * 0.5e-2;
 double Max_shift = 2e-2 * 2e-2;
 
 point_t Fiber_Direction;
+double** __Dihedral_Angles;
 //############precomputation############################################
 double max_3d(double x1, double x2, double x3){
 	if (x1 > x2 && x1 > x3) return x1;
@@ -69,7 +74,7 @@ void net_t_recognize_bnds(net_t net){
 		for (j = 0; j < cnt_shar_spr; j++){
 			spring_t* spr = net.springs.springs[origin[0].springs_id[j]];
 			node_t* neigh = spring_t_get_other_end(spr, origin);
-			
+
 			if (net_t_count_shared_elems(origin, neigh, NULL) < 2){
 				if (is_free(neigh[0].state)) mob++;
 				if (is_fix(neigh[0].state)) unmob++;
@@ -95,16 +100,17 @@ void nets_t_recognize_bnds(nets_t nets){
 double spring_t_set_coef(net_t net, spring_t* obj){
 	node_t* node1 = (*obj).ends[0];
 	node_t*	node2 = (*obj).ends[1];
-	int elems_id[2];
+	int elems_id[2] = {};
 	int cnt = net_t_count_shared_elems(node1, node2, elems_id);
 	double area = net.elems.elems[elems_id[0]][0].area_0;
 	if (cnt > 1)
 		area += net.elems.elems[elems_id[1]][0].area_0;
 	double h = ((*node1).h + (*node2).h) / 2;
-	
+
 	double coef = area * h / (*obj).l_0;
 	return coef;
 }
+
 
 void spring_t_set_stress_params(spring_t* obj, double coef){
 	point_t fiber_direction = Fiber_Direction;
@@ -121,6 +127,8 @@ void springs_t_set_params(net_t net){
 	}
 }
 
+int __TEMPVAR = 0;
+
 void net_t_set_relax_state(net_t net){
 	int e_cnt = net.elems.count, s_cnt = net.springs.count, i;
 	for (i = 0; i < e_cnt; i++){
@@ -132,13 +140,49 @@ void net_t_set_relax_state(net_t net){
 		spr[0].l_0 = spr[0].l;
 	}
 	springs_t_set_params(net);
+
+	__Dihedral_Angles[__TEMPVAR] = (double*) calloc(s_cnt, sizeof(double));
+	for (i = 0; i < s_cnt; ++i){
+        spring_t* spr = net.springs.springs[i];
+        node_t** ends = spr->ends;
+        int se_id[2];
+        int k = net_t_count_shared_elems(ends[0], ends[1], se_id);
+        __Dihedral_Angles[__TEMPVAR][i] = 4 * M_PI;
+        spr->isdigedral = 0;
+        for (int l = 0; l < k; ++l)
+        for (int j = 0; j < 3; ++j)
+            if (net.elems.elems[se_id[l]]->vrts[j] != ends[0] && net.elems.elems[se_id[l]]->vrts[j] != ends[1]){
+                spr->dihedral[l] = net.elems.elems[se_id[l]]->vrts[j];
+                break;
+            }
+        if (k == 2) {
+            spr->isdigedral = 1;
+            point_t p[4];
+            p[0] = spr->dihedral[0]->coord, p[1] = spr->dihedral[1]->coord;
+            p[2] = ends[0]->coord, p[3] = ends[1]->coord;
+            point_t n[2];
+            for (int j = 0; j < 2; ++j)
+                n[j] = NORM(point_t_or_area(p[2], p[3], p[j]));
+            SCAL_S(-1, &n[1]);
+            point_t res = CROSS(n[0], n[1]);
+            double ddif = (1 - DOT(n[0], n[1])) / 2;
+            if (ddif < 0) ddif = 0;
+            if (ddif > 1) ddif = 1;
+            __Dihedral_Angles[__TEMPVAR][i] = 2 * asin(sqrt(ddif));
+            if (DOT(res, DIF(p[3], p[2])) < 0)
+                __Dihedral_Angles[__TEMPVAR][i] *= -1;
+        }
+	}
 }
 
 void nets_t_set_relax_state(nets_t nets, point_t fiber_dir){
+    __Dihedral_Angles = (double**) calloc(nets.count, sizeof(double*));
 	Fiber_Direction = fiber_dir;
 	unsigned int cnt = nets.count, j;
-	for (j = 0; j < cnt; j++)
+	for (j = 0; j < cnt; j++){
+        __TEMPVAR = j;
 		net_t_set_relax_state(nets.nets[j]);
+    }
 }
 
 void net_t_set_elems_neighbours(net_t net){
@@ -157,18 +201,18 @@ void net_t_set_elems_neighbours(net_t net){
 		unsigned int cur_id = (*elem).id;
 		unsigned int i, k = 0;
 		for (i = 0; i < cnt1; i++){
-			unsigned int neigh_id = (*vrtx[0]).elems_id[i]; 
-			if (neigh_id != cur_id) 
+			unsigned int neigh_id = (*vrtx[0]).elems_id[i];
+			if (neigh_id != cur_id)
 				((*elem).neighbours_id)[k++] = neigh_id;
 		}
 		for (i = 0; i < cnt2; i++){
 			unsigned int neigh_id = (*vrtx[1]).elems_id[i];
-			if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id)) 
+			if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id))
 				(*elem).neighbours_id[k++] = neigh_id;
 		}
 		for (i = 0; i < cnt3; i++){
 			unsigned int neigh_id = (*vrtx[2]).elems_id[i];
-			if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id)) 
+			if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id))
 				(*elem).neighbours_id[k++] = neigh_id;
 		}
 	}

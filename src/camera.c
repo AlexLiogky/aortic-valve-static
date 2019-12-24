@@ -1,6 +1,8 @@
 #include "camera.h"
 
-#define My_PI (3.141592653589793238462643383279502884)
+#ifndef M_PI
+    #define M_PI 3.141592653589793238462643383279502884
+#endif
 
 void camera_t_lockCamera(camera_t* camera)
 {
@@ -21,7 +23,7 @@ void camera_t_lockCamera(camera_t* camera)
 
 void camera_t_moveCamera(camera_t* cam, float dir)
 {
-	float rad=(cam->camYaw+dir)* My_PI /180.0;
+	float rad=(cam->camYaw+dir)* M_PI /180.0;
 	cam->loc.coord[0]-=sin(rad)*cam->movevel;
 	cam->loc.coord[2]-=cos(rad)*cam->movevel;
 }

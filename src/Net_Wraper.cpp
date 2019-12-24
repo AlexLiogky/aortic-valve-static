@@ -150,6 +150,7 @@ void NetObject::ColliderStatic::Process(const btDbvtNode* leaf)
 
         Net_Wraper::RContact c;
         c.m_normal = SCAL(1.0 / len, DIF(node->coord, proj));
+        c.m_tnormal = NORM(OR_AREA(n[0], n[1], n[2]));
         c.m_proj = proj;
         c.m_margin = m;
         c.m_node = node;
@@ -211,7 +212,7 @@ void Net_Wraper::splitNet2ColObjs(const std::vector<int>& axisSeq, int depth)
     }
 }
 
-Net_Wraper::Net_Wraper(net_t net, double P, double delta, double margin) : m_net{net}, m_P{P}, m_delta{delta}, m_mrg{margin}
+Net_Wraper::Net_Wraper(net_t net, double P, double delta, double margin) : m_net{net}, m_mrg{margin}, m_P{P}, m_delta{delta}
 {
     std::vector<int> axisSeq({1, 1});
     splitNet2ColObjs(axisSeq, 0);
@@ -234,6 +235,7 @@ void Net_Wraper::updateCollisionInfo()
 
 double Net_Wraper::computeFreeNexts(){
     if (net_is_static(this->m_net)) return 0;
+    set_elastic_model(m_eModel);
     return compute_free_nexts(m_net, m_P, m_delta);
 }
 
@@ -251,6 +253,7 @@ void Net_Wraper::solveRContacts(Net_Wraper* psb)
         {
             const RContact& c = psb->m_rcontacts[i];
             const point_t& nr = c.m_normal;
+            const point_t& nt = c.m_tnormal;
             const point_t& p = c.m_proj;
             node_t& n = *c.m_node;
             if (is_fix(n.state)) continue;
@@ -258,10 +261,19 @@ void Net_Wraper::solveRContacts(Net_Wraper* psb)
             const point_t vr = DIF(n.next, n.coord);
             point_t corr = get_zero_point();
             double dot = DOT(vr, nr);
-            if (dot < 0)
+            double dott = DOT(nr, nt);
+            if (dot < 0 && dott >= 0)
             {
                 const double j = c.m_margin - (DOT(nr, n.next) - DOT(nr, p));
                 ADD_S(&corr, j, c.m_normal);
+            }
+            else if (dott < 0)
+            {
+                const double j = c.m_margin + (DOT(nr, n.next) - DOT(nr, p));
+                ADD_S(&corr, -j, c.m_normal);
+
+//                ADD_S(&corr, -c.m_margin, c.m_normal);
+//                ADD_S(&corr, -(DOT(nt, n.next) - DOT(nt, p)), c.m_tnormal);
             }
             //corr -= ProjectOnPlane(vr, nr) * c.m_friction;
             ADD_S(&n.next, 1, corr);
@@ -294,7 +306,10 @@ void Net_Wraper::solveSContacts(Net_Wraper* psb)
             }
             //corr -= ProjectOnPlane(vr, nr) * c.m_friction;
             if (is_free(n.state) || is_fix(f.vrts[0]->state) || is_fix(f.vrts[1]->state) || is_fix(f.vrts[2]->state))
-                ADD_S(&n.next, c.m_cfm[0], corr);
+            {
+                int sign = (DOT(nr, f.or_area) >= 0) ? 1 : -1;
+                ADD_S(&n.next, sign * c.m_cfm[0], corr);
+            }
             if(is_free(f.vrts[0]->state)  || is_fix(n.state))
                 ADD_S(&f.vrts[0]->next, -c.m_cfm[1] * c.m_weights.coord[0], corr);
             if(is_free(f.vrts[1]->state) || is_fix(n.state))
@@ -303,6 +318,8 @@ void Net_Wraper::solveSContacts(Net_Wraper* psb)
                 ADD_S(&f.vrts[2]->next, -c.m_cfm[1] * c.m_weights.coord[2], corr);
         }
 }
+
+void Net_Wraper::setElasticModel(int type) { assert(type < EMOD_COUNT && type >= 0); m_eModel = type; }
 
 
 

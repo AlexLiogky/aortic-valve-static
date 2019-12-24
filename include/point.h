@@ -1,6 +1,10 @@
 #ifndef _POINT_H
 #define _POINT_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define DIM 3
 
 typedef struct point_t{
@@ -24,6 +28,7 @@ double point_t_length(point_t point); 						//return |x|
 point_t point_t_vec_mul(point_t point1, point_t point2); 	//return [x, y]
 void normalize(point_t* point); 							//x <- x / |x|
 point_t normalize_new(point_t point); 						//return y = x / |x|
+point_t point_t_scale_add_scale(double coef1, point_t p1, double coef2, point_t p2); //return z = c1 * y + c2 * x
 
 //check the equility of points with accuracy "err"
 int point_t_equal(point_t point1, point_t point2, double err);
@@ -151,6 +156,7 @@ void matrix3D_t_dump(matrix3D_t m);
 #define EQ_ERR(vec1, vec2, err) point_t_equal(vec1, vec2, err)//a == b
 #define ADD(vec1, alpha, vec2) point_t_add_scale(vec1, alpha, vec2)// a + k*b
 #define ADD_S(vec1_adr, alpha, vec2) point_t_add_scale_self(vec1_adr, alpha, vec2)
+#define SCAL_SUM(coef1, vec1, coef2, vec2) point_t_scale_add_scale(coef1, vec1, coef2, vec2)
 #define VEC(X, Y, Z) point_t_get_point(X, Y, Z)				//(x, y, z)
 #define ZERO() get_zero_point()								//(0, 0, 0)
 #define LNE(vec1, vec2) point_t_less(vec1, vec2)			//  a < b
@@ -186,5 +192,13 @@ point_t point_t_bary_coord( const point_t a,
                             const point_t b,
                             const point_t c,
                             const point_t p);
+
+//return (p_2 - p_1)^\ortho
+point_t get_ortho_vector(point_t p1, point_t p2, point_t p3);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

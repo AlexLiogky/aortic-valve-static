@@ -27,6 +27,8 @@ public:
         void compute_nets_time(long double compute_time = 1000.0/60, int max_its = 10000);
         solver_t getSolverData() { return m_solver_data; }
         void setSolverData(solver_t data);
+        void setWorldCnd(wrld_cnd_t& cond);
+        std::vector<node_t*> getCollision(double mrg = 0.1); //TODO: сейчас эта функция сохряняет инфу только о магическом первом лепестке, надо это поправить
 
 private:
     void set_initial_solving_params();
@@ -42,8 +44,9 @@ protected:
     void findCollisions();
     void solveCollisions();
 
-private:
+public:
     nets_t m_dynamic_nets;
+private:
     nets_t m_static_nets;
     nets_t m_union_nets;
     std::vector<Net_Wraper*> m_collision;

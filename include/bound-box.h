@@ -4,6 +4,9 @@
 #include "data.h"
 #include "nets.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #define DEFOLT_DATA_ELEM_SIZE 4
 
@@ -82,5 +85,8 @@ void box_t_local_node_to_net_projection(box_t box, node_t* node, net_t net, int 
 void extend_borders(double coef, double brds[3][2]);
 void nets_t_fill_borders(nets_t nets, double res[3][2]);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif

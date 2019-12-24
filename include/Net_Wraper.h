@@ -77,6 +77,7 @@ public:
 		node_t* m_node;         // Node
 		point_t m_proj;         // Projection
 		point_t m_normal;       // Normal
+		point_t m_tnormal;      // Normal of triangle
 		double m_margin;        // Margin
 	};
 
@@ -88,12 +89,15 @@ public:
         Net_Wraper(net_t net, double P, double delta, double margin = 0.1);
 
         double getMargin() { return m_mrg; }
+        void setMargin(double margin) { m_mrg = margin; }
         double computeFreeNexts();
         void addObjs2World(btCollisionWorld* wrld);
         void updateCollisionInfo();
         static void solveSContacts(Net_Wraper* body);
         static void solveRContacts(Net_Wraper* body);
         void setDelta(double delta) { m_delta = delta; }
+        void setElasticModel(int type);
+        void setP(double P) { m_P = P; }
 private:
         void splitNet2ColObjs(const std::vector<int>& axisSeq, int depth);
 
@@ -105,6 +109,9 @@ private:
 	double m_mrg = 0.1;
 	double m_P;
 	double m_delta;
+	int m_eModel = 0;
+
+	friend class World;
 };
 
 using NetObject = Net_Wraper::NetCollisionObject;

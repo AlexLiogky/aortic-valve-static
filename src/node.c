@@ -15,9 +15,10 @@ node_t* node_t_construct(double x, double y, double z, double thickness, unsigne
 	(*obj).contact_elem_id = NULL;
 	(*obj).id = id;
 	(*obj).coapt_relation = -1;
+	point_t_cpy_points(&current, &(*obj).initial);
 	return obj;
 }
-    
+
 int is_free(unsigned int state){
 	return (state == IN || state == MOB_BND);
 }
@@ -81,17 +82,17 @@ char* serialize_node(node_t* node, char* buffer){
 	SAVE_DATA(point_t, node[0].coord);
 	SAVE_DATA(double, node[0].h);
 	SAVE_DATA(unsigned int, node[0].state);
-	
+
 	SAVE_DATA(unsigned int, node[0].cnt_elems);
 	int cnt = node[0].cnt_elems;
 	memcpy(&buffer[off], node[0].elems_id, sizeof(unsigned int) * cnt);
 	off += sizeof(unsigned int) * cnt;
-	
+
 	SAVE_DATA(unsigned int, node[0].cnt_springs);
 	cnt = node[0].cnt_springs;
 	memcpy(&buffer[off], node[0].springs_id, sizeof(unsigned int) * cnt);
 	off += sizeof(unsigned int) * cnt;
-	
+
 	return buffer + off;
 }
 
@@ -109,7 +110,7 @@ char* serialize_vrtx(vrtx_t vrtx, char* buffer){
 
 #define DOWNLOAD_DATA(TYPE, NAME)								\
 TYPE NAME = *((TYPE*) &buffer[*offset]);						\
-*offset += sizeof(TYPE);										
+*offset += sizeof(TYPE);
 
 node_t* deserialize_node(char* buffer, int* offset){
 	DOWNLOAD_DATA(unsigned int, id);
@@ -134,7 +135,7 @@ node_t* deserialize_node(char* buffer, int* offset){
 	node[0].elems_id = elems_id;
 	node[0].cnt_springs = cnt_springs;
 	node[0].springs_id =springs_id;
-	
+
 	return node;
 }
 
@@ -143,7 +144,7 @@ vrtx_t deserialize_vrtx(char* buffer, int* offset){
 	vrtx_t vrtx = vrtx_t_construct(vrtx_cnt);
 	for (unsigned int i = 0; i < vrtx_cnt; i++)
 		vrtx.nodes[i] = deserialize_node(buffer, offset);
-		
+
 	return vrtx;
 }
 

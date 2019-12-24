@@ -41,6 +41,7 @@ net_t get_net_from_file(FILE* input){
 			(*(elems).elems[i]).coef = -1;
 		}
 	}
+	//TODO: можно учесть количество граничных краёв и вычисилить количество пружин точно
 	springs_t sprs = springs_t_construct(3 * elems_cnt);
 	net_t net = net_t_get(vrtx, elems, sprs);
 
@@ -146,7 +147,7 @@ int file_len (FILE* file){
 	return len;
 }
 
-net_t read_net_from_stl(char* file_name){
+net_t read_net_from_stl(const char* file_name){
 	if (strcmp(file_name + strlen(file_name) - strlen(".stl"), ".stl")){
 		perror("Unknown file type\n");
 		net_t net = {0};
@@ -156,13 +157,20 @@ net_t read_net_from_stl(char* file_name){
 	FILE* fp = fopen (file_name, "rb");
 	int len = file_len(fp);
 	char* buffer = (char*)calloc(len, sizeof(char));
-	if ((int)fread (buffer, len, sizeof (char), fp) < len)
+	if ( ((int)fread (buffer, len, sizeof (char), fp) < len) && ferror(fp)){
         perror("Can't read stl file into buffer "), exit(-1);
+        }
 	fclose(fp);
 
+	printf("Start read net from stl file\n");
 	net_t net = read_net_from_stl_buf(buffer, len);
+	printf("Net is read from stl file\n");
+	printf("Start set edges\n");
 	net_t_set_springs(&net);
+	printf("Edges successfuly seted\n");
+	printf("Start set mesh structure\n");
 	init_net(&net);
+	printf("Mesh structure is setted\n");
 
 	free(buffer);
 

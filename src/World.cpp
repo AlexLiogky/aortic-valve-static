@@ -21,6 +21,8 @@ World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver
     m_collision.reserve(m_union_nets.count);
     for (unsigned int i = 0; i < m_dynamic_nets.count; ++i)
         m_collision.push_back(new Net_Wraper(m_dynamic_nets.nets[i], m_conditions.P, m_solver_data.delta, m_mrg));
+    for (auto& i: m_collision)
+        i->setElasticModel(m_solver_data.ElasticModelType);
 
                     //point_t_dump(Bt2p(m_collision[0]->m_bounds[0]));
                     //point_t_dump(Bt2p(m_collision[0]->m_bounds[1]));
@@ -377,9 +379,13 @@ void World::compute_nets_time(long double compute_time, int max_its)
         gettimeofday(&end, NULL);
 		if (compute_dif_ms(end, start) >= compute_time - 0.8) break;
 	}
-	//double res = statistic_t_get_full_mid_diviation(m_statistic);
-	//double rms = res / m_statistic.cnt_nodes;
-	//printf("RMS shift per iter of node = %e mm, relation = %lg, cr = %d / %d\n", rms , res / world->statistic.init_div, crush, i+1);
+	static int cntn = 0;
+	cntn++;
+	if (!(cntn % 100)){
+        double res = statistic_t_get_full_mid_diviation(m_statistic);
+        double rms = res / m_statistic.cnt_nodes;
+        printf("RMS shift per iter of node = %e mm, relation = %lg, cr = %d / %d\n", rms , res / m_statistic.init_div, crush, i+1);
+	}
 	statistic_t_reset(&m_statistic);
 }
 
@@ -434,5 +440,38 @@ void World::setSolverData(solver_t data)
 {
     m_solver_data = data;
     for (auto& i: m_collision)
+    {
         i->setDelta(data.delta);
+        i->setElasticModel(data.ElasticModelType);
+    }
+}
+
+std::vector<node_t*> World::getCollision(double mrg)
+{
+    for (auto& net: m_collision)
+        net->setMargin(mrg);
+
+    /*double shift = m_collision[0]->computeFreeNexts();
+    relaxation(m_union_nets, sqrt(m_allow_shift / shift));
+    m_collision[0]->updateCollisionInfo();*/
+    predictMotion();
+    findCollisions();
+    //solveCollisions();
+
+
+    std::vector<node_t*> res;
+    res.reserve(m_collision[0]->m_scontacts.size());
+    for (int i = 0, cnt = m_collision[0]->m_scontacts.size(); i < cnt; ++i)
+        res.push_back(m_collision[0]->m_scontacts[i].m_node);
+
+    for (auto& net: m_collision)
+        net->setMargin(m_mrg);
+
+    return res;
+}
+
+void World::setWorldCnd(wrld_cnd_t& cond)
+{
+    for (auto& i: m_collision)
+        i->setP(cond.P);
 }

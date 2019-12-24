@@ -1,21 +1,29 @@
 #include <math.h>
 #include "anisotrop-stress.h"
+//#include <assert.h>
+#include "point.h"
 
-const double _E1_0 = 137000;	//Pa
-const double _E1_1 = 568000;	//Pa
-const double _Eps_lim1 = 0.175;
-const double _E2_0 = 63000;	//Pa
-const double _E2_1 = 570000;	//Pa
-const double _Eps_lim2 = 0.175;
+//const double _E1_0 = 137000;	//Pa
+//const double _E1_1 = 568000;	//Pa
+//const double _Eps_lim1 = 0.175;
+//const double _E2_0 = 63000;	//Pa
+//const double _E2_1 = 570000;	//Pa
+//const double _Eps_lim2 = 0.175;
+
+const double _E1_0 = 1350;	//Pa
+const double _E1_1 = 265000;	//Pa
+const double _Eps_lim1 = 0.93;
+const double _E2_0 = 10800;	//Pa
+const double _E2_1 = 1570000;	//Pa
+const double _Eps_lim2 = 0.185;
 
 double _f_stiff(double m1, double m2, double sqr_cos_phi){
 	return sqrt((m1 * m1 - m2 * m2) * sqr_cos_phi + m2 * m2);
 }
 
 stress_t stress_t_construct(point_t spr_direction, point_t* fiber_direction, double coef){
-	assert(fiber_direction);
-	point_t fib_dir;
-	point_t_cpy_points(fiber_direction, &fib_dir);
+	//assert(fiber_direction);
+	point_t fib_dir = *fiber_direction;
 	//normalize(&fib_dir);
 	//normalize(&spr_direction);
 	double cos_phi = DOT(fib_dir, spr_direction);

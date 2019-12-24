@@ -1,9 +1,13 @@
-#ifndef _SEWLEAF_H 
-#define _SEWLEAF_H 
+#ifndef _SEWLEAF_H
+#define _SEWLEAF_H
 
 #include "hermit-splines.h"
 #include "nets.h"
 #include "bound-box.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct segline_t{
 	int len;
@@ -60,16 +64,21 @@ line_t segline_t_get_line(segline_t* head);
 //add point "p" on aorta to sew line "sew" to fit result
 void sew_line_t_add_point(point_t p, sew_line_t* sew);
 
-//return line of sewing on aorta of corresponding leaflet 
+//return line of sewing on aorta of corresponding leaflet
 line_t sew_line_t_get_line_on_aorta(sew_line_t* sew);
 
 //return initialized array sew_line_t[cnt_leafs]
-//aorta - only nets containing aorta 
+//aorta - only nets containing aorta
 //commissur - points of commissure on aorta
 //bottom - lower sewing points placed on commissur[i] - commissur[i+1] sewed line
 //cnt_leafs - count of stitched leaflets
 sew_line_t* init_sew_line_on_aorta(nets_t aorta, point_t* commissur, point_t* bottom, int cnt_leafs);
 
 //TODO: деструктор
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

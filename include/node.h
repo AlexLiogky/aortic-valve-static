@@ -1,14 +1,18 @@
 #ifndef _NODE_
-#define _NODE_ 
+#define _NODE_
 
 #include "point.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct node_t{
 	unsigned int id;
 	point_t coord; //current coordinates
 	point_t next;
 	double h; //thickness
-	unsigned int state; //mobility, boundary? 
+	unsigned int state; //mobility, boundary?
 	unsigned int cnt_elems;
 	unsigned int* elems_id; //in ascending order!!!
 	unsigned int cnt_springs;
@@ -17,6 +21,7 @@ typedef struct node_t{
 	int coapt_state;
 	int* contact_elem_id;
 	double coapt_relation;
+	point_t initial;
 }  node_t;
 
 typedef struct vrtx_t{
@@ -39,14 +44,14 @@ enum State
 // id - unique identificator of node
 node_t* node_t_construct(double x, double y, double z, double thickness, unsigned int state, unsigned int id);
 void node_t_destruct(node_t* node); // destructor
-    
+
 //check state functions
 int is_free(unsigned int state);	//is node free?
 int is_bnd(unsigned int state);		//is node boundary?
 int is_fix(unsigned int state);		//is node fixed?
 int is_free_edge(unsigned int state);//is node belongs to free edge?
 
-//create dynamically nodes container with size = "count" 
+//create dynamically nodes container with size = "count"
 vrtx_t vrtx_t_construct(int count);
 void vrtx_t_destruct(vrtx_t obj); // destructor
 
@@ -56,15 +61,15 @@ int get_node_size(node_t* node);
 //return size of node container including content for serialization in bytes
 int get_vrtx_size(vrtx_t vrtx);
 
-//save seralized node into buffer 
+//save seralized node into buffer
 //ATTENTION: buffer must have enough size
 //return current seek in buffer
 char* serialize_node(node_t* node, char* buffer);
 
-//save seralized node container with content into buffer 
+//save seralized node container with content into buffer
 //ATTENTION: buffer must have enough size
 //return current seek in buffer
-char* serialize_vrtx(vrtx_t vrtx, char* buffer);										
+char* serialize_vrtx(vrtx_t vrtx, char* buffer);
 
 //return dynamical deserialized node
 //change offset to next object in buffer
@@ -96,5 +101,10 @@ void node_t_set_shared_springs(node_t* node, unsigned int* springs_id, unsigned 
 
 //place next -> coord
 void update_nodes(vrtx_t vrtx);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

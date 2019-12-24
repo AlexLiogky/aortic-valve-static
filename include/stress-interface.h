@@ -3,6 +3,10 @@
 
 #include "point.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct stress_t stress_tt;
 
 //construct a spring stress params
@@ -16,5 +20,10 @@ stress_tt stress_t_similar_cpy(double coef, stress_tt stress);
 
 //retrun force caused by deformation
 double stress_t_get_force(double deformation, stress_tt stress);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif // STRESS_INTERFACE_H_INCLUDED

@@ -104,7 +104,7 @@ void net_t_set_springs(net_t* net){		//можно ускорить, примен
 					s_cnt++;
 				}
 		}
-		//if (i % 1000 == 0) printf("i = %d\n", i);
+		if (i % 5000 == 0 && i > 0) printf("Setted springs on %d edges\n", i);
 	}
 	(*net).springs.count = s_cnt;
 }
@@ -287,5 +287,16 @@ nets_t cpy_nets(nets_t nets){
 	nets_t copy = deserialize_nets(buffer);
 	free(buffer);
 	return copy;
+}
+
+spring_t* get_shared_spring(net_t net, node_t* n1, node_t* n2)
+{
+    node_t* n[2] = {n1, n2};
+    int ch = 0;
+    if (n1->cnt_springs > n2->cnt_springs) ch = 1;
+    for (unsigned int i = 0; i < n[ch]->cnt_springs; ++i)
+        if (spring_t_node_belong(net.springs.springs[n[ch]->springs_id[i]], n[(ch + 1) % 2]))
+            return net.springs.springs[n[ch]->springs_id[i]];
+    return NULL;
 }
 

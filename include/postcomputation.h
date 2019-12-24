@@ -3,6 +3,10 @@
 
 #include "nets.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 //return middle area of "node"
 double node_t_area(net_t net, node_t* node);
 
@@ -42,5 +46,10 @@ double nets_t_get_coapt_area_between(nets_t nets, int net_id1, int net_id2);
 
 //return full area of "net"
 double net_t_get_full_area(net_t net);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

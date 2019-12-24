@@ -1,7 +1,11 @@
-#ifndef _HSPLINES_H 
-#define _HSPLINES_H 
+#ifndef _HSPLINES_H
+#define _HSPLINES_H
 
 #include "point.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct p2d{
 	double pnt[2];
@@ -38,7 +42,7 @@ double sqr_dist_to_2D_line_fragment(p2d frag[2], p2d p); //compute distance from
 spdot_t* get_nearest_prev_dot(spline_t spline, double pnt[2], int* id);
 
 //automatically set direction of derivation in "dot" belonging spline
-//if there are no "next" or "prev" dot set rude derivation 
+//if there are no "next" or "prev" dot set rude derivation
 void spdot_t_auto_set_der(spdot_t* dot);
 
 //automatically set direction of derivation in "dot" belonging spline
@@ -50,6 +54,11 @@ p2d* get_transit_spline_points(spdot_t* cur, int count);
 
 //return double[2]* array of 2d points with len = "line_len" consisting spline
 double** get_spline(spline_t spline, int* line_len);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 
 #endif

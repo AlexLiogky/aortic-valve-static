@@ -4,6 +4,10 @@
 #include "nets.h"
 #include <math.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 extern double Contact_Resolution;
 extern double Contact_Const;
 extern double Min_Contact_Const;
@@ -12,6 +16,7 @@ extern double Allow_shift;
 extern double Max_shift;
 
 extern point_t Fiber_Direction;
+extern double** __Dihedral_Angles;
 //############precomputation############################################
 //return max value
 double max_3d(double x1, double x2, double x3);
@@ -38,7 +43,7 @@ void net_t_set_elems_neighbours(net_t net);
 //set shared elem for every elem in net container
 void nets_t_set_elems_neighbours(nets_t nets);
 
-//set some relaxational consts bounded max shift during computations 
+//set some relaxational consts bounded max shift during computations
 void set_relax_consts(nets_t nets, double rel_allow_shift, double rel_max_shift);
 
 void set_contact_recognition_resolution(double contact_resolution);
@@ -54,6 +59,12 @@ double get_Min_Contact_Const();
 //don't set springs parameters
 void precomputation(nets_t nets);
 //############precomputation############################################
+
+int net_t_count_shared_elems(node_t* node1, node_t* node2, int* elems_id);
+
+#ifdef __cplusplus
+}
+#endif
 
 
 #endif

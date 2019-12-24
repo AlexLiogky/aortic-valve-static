@@ -2,13 +2,19 @@
 #include <math.h>
 #include <stdlib.h>
 #include <string.h>
+#include <assert.h>
 #include "save-data.h"
 #include "format_in.h"
 #include "precomputation.h"
 #include "computation.h"
 
+#ifndef M_PI
+    #define M_PI 3.141592653589793238462643383279502884
+#endif
+
 double Contact_Force_Const1 = 0.0005;//0.001;//0.00008;
 double Contact_Force_Const2 = 0.02;//0.01;//0.02;
+int ElasticModelType = 0;
 
 void set_contact_force_consts(double k1, double k2){
 	Contact_Force_Const1 = k1;
@@ -21,7 +27,7 @@ point_t pressure_force(net_t net, node_t* node, double P){
 	for (i = 0; i < e_cnt; i++){
 		f = point_t_sum(f, (*(net.elems.elems[(*node).elems_id[i]])).or_area);
 	}
-	point_t_coef_mul(P/3 * 133.3, &f); //10^-4 * H
+	point_t_coef_mul(P/3 * 133.3, &f); //10^-6 * H
 	return f;
 }
 
@@ -67,13 +73,382 @@ point_t f_spring(net_t net, node_t* node, spring_t* spring){
 	return force;
 }
 
-point_t elastic_force(net_t net, node_t* node){
+
+point_t elastic_force_MSM(net_t net, node_t* node){
 	unsigned int sp_cnt = (*node).cnt_springs, i;
 	point_t f = get_zero_point();
 	for (i = 0; i < sp_cnt; i++){
 		f = point_t_sum(f, f_spring(net, node, net.springs.springs[(*node).springs_id[i]]));
 	}
+
 	return f; //10^-4 * H
+}
+
+point_t elastic_force_REINFORCING(net_t net, node_t* node){
+    double mu = 1000000.0  / 3.0;
+    double Jm = 2.3;
+
+    point_t f = ZERO();
+
+    for (unsigned int i = 0; i < node->cnt_elems; ++i)
+    {
+        elem_t* triag = net.elems.elems[node->elems_id[i]];
+        node_t* n[3] = {};
+        int flag = 0;
+        for (int j = 0; j < 3; ++j)
+        {
+            n[j] = triag->vrts[j];
+            if (triag->vrts[j] == node)
+            {
+                n[j] = n[0];
+                n[0] = node;
+                flag = 1;
+            }
+        }
+        assert(flag);
+
+        point_t ff = ZERO();
+        assert(LEN(ff) < 10 * DBL_EPSILON);
+        double Ap = triag->area_0;
+        point_t D[3] = {};
+        for (int j = 0; j < 3; ++j)
+            D[j] = SCAL(1.0 / 2 / Ap, get_ortho_vector(n[(j + 1)%3]->initial, n[(j + 2)%3]->initial, n[(j)%3]->initial));
+        double Aq = LEN(triag->or_area);
+
+        double trC = 0;
+        for (int j = 0; j < 3; ++j)
+            for (int k = 0; k < j; ++k)
+                trC += 2 * DOT(n[j]->coord, n[k]->coord) * DOT(D[j], D[k]);
+        for (int j = 0; j < 3; ++j)
+            trC += DOT(n[j]->coord, n[j]->coord) * DOT(D[j], D[j]);
+
+        double J = Aq / Ap;
+        for (int j = 0; j < 3; ++j)
+            ADD_S(&ff, Ap * DOT(D[0], D[j]), n[j]->coord);
+        ADD_S(&ff, -1.0 / 2 / J / J / J, get_ortho_vector(n[1]->coord, n[2]->coord, n[0]->coord));
+        ADD_S(&f, mu / (1 - (trC + 1 / J / J - 3) / Jm), ff);
+    }
+
+    SCAL_S(-node->h, &f);
+
+    return f;
+}
+
+point_t elastic_force_NEOGOOK(net_t net, node_t* node){
+    double mu = 1000000.0 / 3;
+    //double d = 1;
+
+    point_t f = ZERO();
+    for (unsigned int i = 0; i < node->cnt_elems; ++i)
+    {
+        elem_t* triag = net.elems.elems[node->elems_id[i]];
+        node_t* n[3] = {};
+        int flag = 0;
+        for (int j = 0; j < 3; ++j)
+        {
+            n[j] = triag->vrts[j];
+            if (triag->vrts[j] == node)
+            {
+                n[j] = n[0];
+                n[0] = node;
+                flag = 1;
+            }
+        }
+        assert(flag);
+
+        double Ap = triag->area_0;
+        point_t D[3] = {};
+        for (int j = 0; j < 3; ++j)
+            D[j] = SCAL(1.0 / 2.0 / Ap, get_ortho_vector(n[(j + 1)%3]->initial, n[(j + 2)%3]->initial, n[(j)%3]->initial));
+        double Aq = LEN(triag->or_area);
+//        double trC = 0;
+//        for (int j = 0; j < 3; ++j)
+//            for (int k = 0; k < j; ++k)
+//                trC += 2 * DOT(n[j]->coord, n[k]->coord) * DOT(D[j], D[k]);
+//        for (int j = 0; j < 3; ++j)
+//            trC += DOT(n[j]->coord, n[j]->coord) * DOT(D[j], D[j]);
+//        static int tmp = 0;
+//        tmp++;
+//        if (!(tmp % 100000)) printf("trC = %lg\n", trC);
+
+        double J = Aq / Ap;
+       // double Jm = 2.3;
+       // double coef = 1.0 / (1 - (trC + 1 / J / J - 3) / Jm);
+        for (int j = 0; j < 3; ++j)
+            ADD_S(&f, mu * Ap * DOT(D[0], D[j]), n[j]->coord);
+
+        ADD_S(&f, -mu / 2 / J / J / J, get_ortho_vector(n[1]->coord, n[2]->coord, n[0]->coord));
+        //ADD_S(&f, ((J - 1) * d - 1)* mu / 2, get_ortho_vector(n[1]->coord, n[2]->coord, n[0]->coord));
+        /*for (int j = 0; j < 3; ++j)
+            ADD_S(&f, mu * Ap / 2 * DOT(D[0], D[j]) * (trC - 3), n[j]->coord);
+        ADD_S(&f, (J - 1) * d, get_ortho_vector(n[1]->initial, n[2]->initial, n[0]->initial));*/
+    }
+
+    SCAL_S(-node->h, &f);
+
+    return f;
+
+}
+
+
+
+point_t elastic_force_TRQS(net_t net, node_t* node){     //St Venan
+    double E = 1000000;      //Young modulus, Pa
+	double nu = 0.45;           //Poisson ratio
+
+    point_t f = ZERO();
+    for (unsigned int i = 0; i < node->cnt_elems; ++i)
+    {
+        elem_t* triag = net.elems.elems[node->elems_id[i]];
+        node_t* n[3] = {};
+        int flag = 0;
+        for (int j = 0; j < 3; ++j)
+        {
+            n[j] = triag->vrts[j];
+            if (triag->vrts[j] == node)
+            {
+                n[j] = n[0];
+                n[0] = node;
+                flag = 1;
+            }
+        }
+        assert(flag);
+
+        point_t dir[3] = {};
+        dir[0] = DIF(n[1]->coord, n[2]->coord);
+        dir[1] = DIF(n[2]->coord, n[0]->coord);
+        dir[2] = DIF(n[0]->coord, n[1]->coord);
+        double dir_len[3] = {};
+        for (int j = 0; j < 3; ++j)
+            dir_len[j] = LEN(dir[j]);
+
+        double k[3] = {}, c[3] = {}, alpha[3] = {};
+        for (int j = 0; j < 3; ++j)
+            alpha[j] = M_PI - acos (DOT(dir[(j + 2) % 3], dir[(j + 1) % 3]) / (dir_len[(j + 2) % 3] * dir_len[(j + 1) % 3]));
+//        static int counter = 0;
+//        if (counter == 16)
+//            printf("smth");
+//        if (n[0]->id == 200) counter++;
+//        if (!(fabs(M_PI - alpha[0] - alpha[1] - alpha[2]) < 1.0e-6))
+//        {
+//
+//            printf ("dif = %lg\n", fabs(M_PI - alpha[0] - alpha[1] - alpha[2]));
+//            point_t_dump(n[0]->coord);
+//            point_t_dump(n[0]->next);
+//            printf("id = %d, cnt = %d\n", n[0]->id, counter++);
+//            point_t_dump(n[1]->coord);
+//            point_t_dump(n[2]->coord);
+//        }
+//        assert(fabs(M_PI - alpha[0] - alpha[1] - alpha[2]) < 1.0e-6);
+
+        double ctg[3] = {};
+        for (int j = 0; j < 3; ++j)
+            ctg[j] = 1.0 / tan(alpha[j]);
+        double scl = 16 * triag->area_0 * (1 - nu * nu) / E;
+        for (int j = 0; j < 3; ++j)
+        {
+            k[j] = (2 * ctg[j] * ctg[j] + 1 - nu) / scl;
+            c[j] = (2 * ctg[(j + 1) % 3] * ctg[(j + 2) % 3] + nu - 1) / scl;
+        }
+
+        double d2l[3] = {};
+        for (int j = 0; j < 3; ++j)
+        {
+            spring_t* spr = get_shared_spring(net, n[(j + 1) % 3], n[(j + 2) % 3]);
+            assert(spr != NULL);
+            d2l[j] = dir_len[j] * dir_len[j] - spr->l_0 * spr->l_0;
+        }
+        SCAL_S(-1, &dir[2]);
+
+        for (int j = 1; j < 3; ++j)
+        {
+            double cf = k[j] * d2l[j] + c[3 - j] * d2l[0] + c[0] * d2l[3 - j];
+
+            ADD_S(&f, cf, dir[j]);
+        }
+    }
+
+    SCAL_S(node->h, &f);
+    //if (LEN(f) > 10000){
+    //    printf("Foo");
+    //}
+
+    return f;   //10^-6 * H
+}
+
+
+/*
+point_t elastic_force1(net_t net, node_t* node){
+    double E = 1000000;         //Young modulus, Pa
+
+    point_t f = ZERO();
+    for (unsigned int i = 0; i < node->cnt_elems; ++i)
+    {
+        elem_t* triag = net.elems.elems[node->elems_id[i]];
+        node_t* n[3];
+        for (int j = 0; j < 3; ++j)
+        {
+            n[j] = triag->vrts[j];
+            if (triag->vrts[j] == node)
+            {
+                n[j] = n[0];
+                n[0] = node;
+            }
+        }
+
+        point_t dir[3];
+        dir[0] = DIF(n[1]->coord, n[2]->coord);
+        dir[1] = DIF(n[2]->coord, n[0]->coord);
+        dir[2] = DIF(n[0]->coord, n[1]->coord);
+        double dir_len[3];
+        for (int j = 0; j < 3; ++j)
+            dir_len[j] = LEN(dir[j]);
+
+
+        double kk = E * node->h;
+        double area[3] = {};
+
+        double dl[3] = {};
+        double l_0[3] = {};
+        spring_t* sprr[3];
+        for (int j = 0; j < 3; ++j)
+        {
+            spring_t* spr = get_shared_spring(net, n[(j + 1) % 3], n[(j + 2) % 3]);
+            assert(spr != NULL);
+            dl[j] = dir_len[j]  -  spr->l_0;
+            if (fabs(dir_len[j] - spr->l) > 1.0e-8)
+                printf("str 195\n");
+            l_0[j] = spr->l_0;
+            double lll = spr->l;
+            int elems_id[2];
+            for (int k = 0, cnt = net_t_count_shared_elems(n[(j + 1) % 3], n[(j + 2) % 3], elems_id); k < cnt; ++k)
+                area[j] += net.elems.elems[elems_id[k]]->area_0;
+            sprr[j] = spr;
+        }
+        for (int j = 0; j < 3; ++j){
+        double coef = sprr[j]->stress_params.sigma1 - E * node->h / l_0[j] * area[j];
+        if (coef > 1e-8)
+            printf("Странно\n");
+        }
+
+        SCAL_S(-1, &(dir[2]));
+
+        for (int j = 1; j < 3; ++j)
+        {
+            double cf = kk * triag->area_0 / l_0[j] / l_0[j] * dl[j];
+            NORM_S(&dir[j]);
+            ADD_S(&f, cf, dir[j]);
+            res[2 * i + j - 1] = SCAL(cf, dir[j]);
+        }
+    }
+    for (int i = 0; i < node->cnt_springs; ++i)
+    {
+        double E = 1000000;
+        spring_t* spr = net.springs.springs[node->springs_id[i]];
+        int elems_id[2];
+        double area = 0;
+        for (int k = 0, cnt = net_t_count_shared_elems(node, spring_t_get_other_end(spr, node), elems_id); k < cnt; ++k)
+                area += net.elems.elems[elems_id[k]]->area_0;
+        //pes[3 + i%3] = SCAL(E * node->h / spr->l_0 * area * (spr->l - spr->l_0) / spr->l_0, spr->direction);
+        node_t* node1 = spring_t_get_other_end(spr, node);
+        point_t dir = DIF(node1->coord, node->coord);
+        point_t dir1 = SCAL(spr->l, spr->direction);
+        double dif = LEN(DIF(dir, dir1));
+            if (LEN(SUM(dir, dir1)) < dif) dif = LEN(SUM(dir, dir1));
+        if (dif > 1.0e-5)
+            printf("Вот оно\n");
+        double hhhh = 4;
+    }
+
+
+    return f;   //10^-6 * H
+}*/
+
+void set_elastic_model(int type) { ElasticModelType = type; }
+
+point_t elastic_force(net_t net, node_t* node){
+    typedef point_t (*elast_t)(net_t net, node_t* node);
+    static elast_t elast_model[] = {
+        elastic_force_MSM,
+        elastic_force_TRQS,
+        elastic_force_NEOGOOK,
+        elastic_force_REINFORCING
+    };
+
+    return elast_model[ElasticModelType](net, node);
+}
+
+void get_foces_to_bending_elem(spring_t* spr, point_t f[4], double teta_0){
+    double k_e = 100;
+
+    node_t** ends = spr->ends;
+    node_t** dihed = spr->dihedral;
+    point_t n[2];
+    double s[2];
+    for (int j = 0; j < 2; ++j){
+        n[j] = point_t_or_area(ends[0]->coord, ends[1]->coord, dihed[j]->coord);
+        s[j] = LEN(n[j]);
+        NORM_S(&n[j]);
+    }
+
+    SCAL_S(-1, &n[1]);
+    point_t res = CROSS(n[0], n[1]);
+    double ddif = (1 - DOT(n[0], n[1])) / 2;
+    if (ddif < 0) ddif = 0;
+    if (ddif > 1) ddif = 1;
+    double teta = 2 * asin(sqrt(ddif));
+    if (DOT(res, DIF(ends[1]->coord, ends[0]->coord)) < 0)
+        teta *= -1;
+    point_t p[4] = {};
+    p[0] = spr->dihedral[0]->coord, p[1] = spr->dihedral[1]->coord;
+    p[2] = ends[0]->coord, p[3] = ends[1]->coord;
+
+    point_t E = DIF(p[3], p[2]);
+    double e = LEN(E);
+    NORM_S(&E);
+
+    f[0] = SCAL(e / s[0], n[0]);
+    f[1] = SCAL(e / s[1], n[1]);
+    f[2] = ADD(SCAL(DOT(DIF(p[0], p[3]), E) / s[0], n[0]), DOT(DIF(p[1], p[3]), E) / s[1], n[1]);
+    f[3] = ADD(SCAL(-DOT(DIF(p[0], p[2]), E) / s[0], n[0]), -DOT(DIF(p[1], p[2]), E) / s[1], n[1]);
+
+    double coef = k_e * e * e / (s[0] + s[1]);
+    for (int i = 0; i < 4; ++i)
+        SCAL_S(coef * (sin(teta / 2) - sin(teta_0 / 2)), &f[i]); //sin(teta / 2) - sin(teta_0 / 2)
+}
+
+point_t* __bendings;
+int __sz_bendings = 0;
+int __TEMPVNET = 0;
+
+void init_bending_forces(net_t net){
+    if (__sz_bendings == 0){
+        __bendings = (point_t*) calloc(net.vrtx.count, sizeof(point_t));
+        __sz_bendings = net.vrtx.count;
+    }
+    else if (__sz_bendings < net.vrtx.count) {
+        __bendings = (point_t*) realloc(__bendings, net.vrtx.count * sizeof(point_t));
+        __sz_bendings = net.vrtx.count;
+    }
+    memset(__bendings, 0, __sz_bendings * sizeof(point_t));
+
+    for (int i = 0, s_cnt = net.springs.count; i < s_cnt; ++i)
+    {
+        if (!net.springs.springs[i]->isdigedral) continue;
+        point_t p[4] = {};
+        spring_t* spr = net.springs.springs[i];
+        get_foces_to_bending_elem(spr, p, __Dihedral_Angles[__TEMPVNET][i]);
+        ADD_S(&__bendings[spr->dihedral[0]->id], 1, p[0]);
+        ADD_S(&__bendings[spr->dihedral[1]->id], 1, p[1]);
+        ADD_S(&__bendings[spr->ends[0]->id], 1, p[2]);
+        ADD_S(&__bendings[spr->ends[1]->id], 1, p[3]);
+    }
+
+}
+
+point_t bending_force(net_t net, node_t* node, int vrt_id)
+{
+    return __bendings[vrt_id];;
 }
 
 point_t get_contact_force(double dist, point_t normal, double force, node_t* node){
@@ -229,14 +604,29 @@ void relaxation(nets_t nets, double coef){
 	}
 }
 
+double gt_elastic = 0;
+
 double compute_free_nexts(net_t net, double P, double delta){
-	int cnt_vrt = net.vrtx.count, i;
+	int cnt_vrt = net.vrtx.count, i = 0;
 	double max_shift = 0;
+	//init_bending_forces(net);                     //bending
 	for (i = 0; i < cnt_vrt; i++){
 		node_t* node = net.vrtx.nodes[i];
 		if (is_fix((*node).state)) continue;
 		point_t F_p = pressure_force(net, node, P);
+
+		struct timeval start, end;
+        gettimeofday(&start, NULL);
 		point_t F_sp = elastic_force(net, node);
+		gettimeofday(&end, NULL);
+        gt_elastic += (end.tv_sec  - start.tv_sec) * 1.e+3 + (end.tv_usec - start.tv_usec) * 1.e-3;
+
+		//point_t F_bn = bending_force(net, node, i);       //bending
+		//printf("p = "); point_t_dump(F_p);
+		//printf("bn = "); point_t_dump(F_bn);
+		//printf("sp = "); point_t_dump(F_sp);
+		//ADD_S(&F_sp, 1.0, F_bn);
+
 		point_t next = SCAL(delta, SUM(F_p, F_sp));
 
 		double next_sqr_len = SQR_LEN(next);
@@ -302,6 +692,7 @@ int compute_nexts(nets_t nets, double P, double delta, int constraint, box_t box
 	int ret = 0;
 	for (i = 0; i < nets_cnt; i++){
 		if (net_is_static(nets.nets[i])) continue;
+		__TEMPVNET = i;
 		double max_net_shift = compute_free_nexts(nets.nets[i], P, delta);
 		if (shift < max_net_shift) shift = max_net_shift;
 	}
@@ -317,6 +708,8 @@ int compute_nexts(nets_t nets, double P, double delta, int constraint, box_t box
 point_t* Mid_Shift;
 unsigned int Cnt_Nodes;
 
+unsigned int get_Cnt_Nodes() { return Cnt_Nodes; }
+point_t get_Mid_Shift(int i) { return Mid_Shift[i]; }
 void construct_Mid_Shift(nets_t nets){
 	unsigned int cnt_nodes = 0, cnt_nets = nets.count, i;
 	for (i = 0; i < cnt_nets; i++)
@@ -552,7 +945,10 @@ void compute_nets_time(long double compute_time, world_t* world, int max_its)
 	}
 	double res = statistic_t_get_full_mid_diviation(world->statistic);
 	double rms = res / world->statistic.cnt_nodes;
-	//printf("RMS shift per iter of node = %e mm, relation = %lg, cr = %d / %d\n", rms , res / world->statistic.init_div, crush, i+1);
+//	static int n = 0;
+//	n++;
+//	if (!(n % 100))
+//        printf("RMS shift per iter of node = %e mm, relation = %lg, cr = %d / %d\n", rms , res / world->statistic.init_div, crush, i+1);
 	statistic_t_reset(&world->statistic);
 
 }

@@ -1,18 +1,25 @@
 #ifndef _SPR_
-#define _SPR_ 
+#define _SPR_
 
 #include "point.h"
 #include "node.h"
 #include "stress.h"
+
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 typedef struct spring_t{
 	unsigned int id;
 	double l_0; //initial length
 	double l;   //current length
 	node_t* ends[2]; //nodes -- ends of spring
-	point_t direction;	
+	point_t direction;
 	double force;
 	stress_t stress_params; //for computation spring constant of stiffness
+
+	node_t* dihedral[2];
+	int isdigedral;
 } spring_t;
 
 typedef struct springs_t{
@@ -24,7 +31,7 @@ typedef struct springs_t{
 spring_t* spring_t_construct(node_t* node1, node_t* node2, unsigned int id);
 void spring_t_destruct(spring_t* spr); //destructor
 
-//create dynamically springs container with size = "count" 
+//create dynamically springs container with size = "count"
 springs_t springs_t_construct(int count);
 void springs_t_destruct(springs_t obj); //destructor
 
@@ -55,26 +62,31 @@ int get_spring_size(spring_t* spr);
 //return useful size of spring container including content for serialization in bytes
 int get_springs_size(springs_t sprs);
 
-//save seralized spring into buffer 
+//save seralized spring into buffer
 //ATTENTION: buffer must have enough size
 //return current seek in buffer
 char* serialize_spring(spring_t* spring, char* buffer);
 
-//save seralized spring container with content into buffer 
+//save seralized spring container with content into buffer
 //ATTENTION: buffer must have enough size
 //return current seek in buffer
 char* serialize_springs(springs_t sprs, char* buffer);
 
 //return dynamical deserialized spring
 //change offset to next object in buffer
-//ATTENTION: deserialization without corresponding nodes container is impossible 
-//"vrtx" - nodes container got from buffer 
+//ATTENTION: deserialization without corresponding nodes container is impossible
+//"vrtx" - nodes container got from buffer
 spring_t* deserialize_spring(char* buffer, int* offset, vrtx_t vrtx);
 
 //return dynamical deserialized node container with content
 //change offset to next object in buffer
-//ATTENTION: deserialization without corresponding nodes container is impossible 
-//"vrtx" - nodes container got from buffer 
+//ATTENTION: deserialization without corresponding nodes container is impossible
+//"vrtx" - nodes container got from buffer
 springs_t deserialize_springs(char* buffer, int *offset, vrtx_t vrtx);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif

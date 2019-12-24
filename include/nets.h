@@ -6,6 +6,10 @@
 #include "elem.h"
 #include "spring.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct net_t{
 	vrtx_t vrtx;
 	elems_t elems;
@@ -119,5 +123,14 @@ net_t cpy_net(net_t net);
 
 //create dynamical deep copy of net container
 nets_t cpy_nets(nets_t nets);
+
+//return spring between n1 and n2
+//if there is no such spring then return NULL
+spring_t* get_shared_spring(net_t net, node_t* n1, node_t* n2);
+
+#ifdef __cplusplus
+}
+#endif
+
 
 #endif
