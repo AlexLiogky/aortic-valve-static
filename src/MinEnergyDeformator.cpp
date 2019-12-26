@@ -37,13 +37,15 @@ public:
         p[1] = sp.dihedral[1]->coord;
         p[2] = sp.ends[0]->coord;
         p[3] = sp.ends[1]->coord;
-        double* x = df, k;
-        if (x) {
+        double x[12] = {}, k;
+        if (df) {
             double phi = deriv_f3(p, x, 1.0, scale, &k);
             double weightphik = weight * phi;
             double _edge_coef = -2 * weightphik;
-            for (int i = 0; i < 12; ++i)
+            for (int i = 0; i < 12; ++i) {
                 x[i] *= _edge_coef;
+                df[i] += x[i];
+            }
             return weightphik * phi * k;
         }
         else{
@@ -162,26 +164,53 @@ public:
         bool intersect = (pnmb > 0);
         if (df && intersect){
             for (int i = 0; i < 3; ++i)
-                df[i] = mpnmb2 * normal.coord[i];
+                df[i] += mpnmb2 * normal.coord[i];
         }
         return (intersect) ? weight * pnmb * pnmb : 0;
     }
 };
 
+class ForceFunctor: public MinEnergyDeformator::EnergyFunctor {
+public:
+    point_t force;
+    double weight;
+private:
+    point_t m_f;
+public:
+
+    ForceFunctor(double weight, const point_t& force) :
+            weight{weight}, force{force}, m_f{SCAL(-weight, force)} {}
+    virtual double operator()(const net_t& mesh, int node_id, double* df) override {
+        if (df)
+            for (int i = 0; i < 3; ++i)
+                df[i] += m_f.coord[i];
+        return DOT(mesh.vrtx.nodes[node_id]->coord, m_f);
+    }
+};
+
 void set_default_length_constr(MinEnergyDeformator& m, double weight){
+    if (weight == 0) return;
     auto en = std::make_shared<LengthFunctor>(weight);
     m.addEdgeEnergyComponent(en);
 //        m.addEdgeEnergyComponent(new LengthFunctor(weight));
 }
 
 void set_default_digedral_angle_constr(MinEnergyDeformator& m, double weight, double scale, bool convexity){
+    if (weight == 0) return;
     auto en = std::make_shared<DigedralFunctor>(weight, scale, convexity);
     m.addDigedralEnergyComponent(en);
 //        m.addDigedralEnergyComponent(new DigedralFunctor(weight, scale, convexity));
 }
 
 void set_plane_constr(MinEnergyDeformator& m, double weight, const point_t& normal, double b){
+    if (weight == 0) return;
     auto en = std::make_shared<PlaneConstrFunctor>(weight, normal, b);
     m.addNodeEnergyComponent(en);
 //        m.addNodeEnergyComponent(new PlaneConstrFunctor(weight, normal, b));
+}
+
+void set_isotrop_force(MinEnergyDeformator& m, double weight, const point_t& force){
+    if (weight == 0) return;
+    auto en = std::make_shared<ForceFunctor>(weight, force);
+    m.addNodeEnergyComponent(en);
 }

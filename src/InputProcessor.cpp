@@ -9,6 +9,7 @@
 #include <fstream>
 #include <cstdlib>
 #include <experimental/filesystem>
+#include <boost/range/size_type.hpp>
 
 
 using json = nlohmann::json;
@@ -41,6 +42,10 @@ array<double, 3> from_vec(vector<double> v){
 
 #define SETW(X, Y, Z, W) if (Y.count(Z)) X = Y[Z]; else no_field(W)
 
+string get_directory(string filepath){
+    return filepath.substr(0, filepath.find_last_of("/")) + "/";
+}
+
 void InputProcessor::processConfigFile_aorta(string filename) {
     if (aorticInputFile.size() && filename != aorticInputFile)
         cout << "Warning: The field \"aorta\" in file " + aorticInputFile + " will be ignored.\n";
@@ -52,13 +57,16 @@ void InputProcessor::processConfigFile_aorta(string filename) {
         no_field("aorta");
         return;
     }
-    if (conf["aorta"].count("mesh_file"))
+    string direct = get_directory(filename);
+    if (conf["aorta"].count("mesh_file")) {
         a_in.aorta_file = conf["aorta"]["mesh_file"];
+        a_in.aorta_file = direct + a_in.aorta_file;
+    }
     else
         no_field("aorta:mesh_file");
 
     if (conf["aorta"].count("boundary_file"))
-        a_in.leaflet_boundaries = conf["aorta"]["boundary_file"];
+        a_in.leaflet_boundaries = direct + conf["aorta"]["boundary_file"].get<string>();
     else
         no_field("aorta:boundary_file");
 
@@ -109,6 +117,7 @@ void InputProcessor::processConfigFile_leaflets(string filename) {
     int n = conf["leaflets"].size();
     l_ins.resize(n);
     ots.resize(n);
+    string direct = get_directory(filename);
     for (int i = 0; i < n; ++i){
         json leaf = conf["leaflets"][i];
         if (!leaf.count("mesh")){
@@ -124,7 +133,7 @@ void InputProcessor::processConfigFile_leaflets(string filename) {
             if (mesh.count("model_params"))
                 l_ins[i].model_params = mesh["model_params"].get<vector<double >>();
             if (mesh.count("mesh_file"))
-                l_ins[i].model = mesh["mesh_file"];
+                l_ins[i].leaflet_file = direct + mesh["mesh_file"].get<string>();
             else
                 if (!l_ins[i].generative)
                     no_field("leaflets[" + to_string(i) + "]:mesh:mesh_file");
@@ -147,6 +156,7 @@ void InputProcessor::processConfigFile_leaflets(string filename) {
                     cout << "Warning: in leaflets[\" + to_string(i) + \"]:traits: \"elastic_model\" not setted but \"elastic_params\" setted.\n";
                 ots[i].elastic_model_params = traits["elastic_params"].get<vector<double>>();
             }
+            SET(ots[i].thickness, traits, "thickness");
             SET(ots[i].pressure, traits, "pressure");
             SET(ots[i].collision_margin, traits, "collision_margin");
             SET(ots[i].renderLabel, traits, "render_label");
@@ -168,6 +178,8 @@ void InputProcessor::processConfigFile_sew_energy(string filename) {
     SET(sep.sqr_length_w, conf, "mesh_edge_constraint_weight");
     SET(sep.digedral_angle_w, conf, "mesh_digedral_element_weight");
     SET(sep.convexity_w, conf, "mesh_convexity_factor");
+    SET(sep.force_w, conf, "external_force_weight");
+    SET(sep.shift, conf, "axis_shift_factor");
     if (conf.count("energy_minimizer_params")){
         json emp = conf["energy_minimizer_params"];
         SET(sep.sp.freq, emp, "freq");
@@ -193,6 +205,7 @@ void InputProcessor::processConfigFile_solver(string filename) {
     SETW(sp.eps, conf, "eps", "solver_params:eps");
     SET(sp.max_possible_shift_scale, conf, "max_shift_scale");
     SET(sp.max_possible_recommend_shift_scale, conf, "max_recommend_shift_scale");
+    SET(sp.max_time, conf, "max_time_sec");
 }
 
 string getPostfix(){
@@ -249,17 +262,21 @@ void InputProcessor::processConfigFile_out_template(string filename){
     bool use_res_postfix = false;
     SET(use_res_postfix, conf, "use_results_postfix");
     struct AddPostfix{
-        static void addPosix(string& name, const string& posix){
-            if (name.length())
-                name.insert(name.find_last_of("."), posix);
+        static void addPosix(string& name, const string& posix, bool use_posix = true){
+            if (!use_posix) return;
+            if (name.length()) {
+                int pos = name.find_last_of(".");
+                if (pos == string::npos) pos = name.length();
+                name.insert(pos, posix);
+            }
         }
     };
-    AddPostfix::addPosix(ro.aorta_to_nts, ro.postfix);
+    AddPostfix::addPosix(ro.aorta_to_nts, ro.postfix, use_res_postfix);
     ro.aorta_to_nts = ro.res_dir + ro.aorta_to_nts;
-    AddPostfix::addPosix(ro.log_name, ro.postfix);
+    AddPostfix::addPosix(ro.log_name, ro.postfix, use_res_postfix);
     ro.log_name = ro.res_dir + ro.log_name;
     for (int i = 0; i < ro.leaf_names.size(); ++i) {
-        AddPostfix::addPosix(ro.leaf_names[i], ro.postfix);
+        AddPostfix::addPosix(ro.leaf_names[i], ro.postfix, use_res_postfix);
         ro.leaf_names[i] = ro.res_dir + ro.leaf_names[i];
     }
 }

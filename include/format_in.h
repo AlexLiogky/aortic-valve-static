@@ -24,7 +24,7 @@ typedef struct bnds_t{
 
 //read bound range from file where it saved in special format
 //ATTENTION: file must have type - ".bnd"
-bnds_t read_bnds(char* f_name);
+bnds_t read_bnds(const char* f_name);
 //############formatted_input###########################################
 
 #ifdef __cplusplus

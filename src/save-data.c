@@ -88,6 +88,22 @@ void print_stl_block(int fp, elem_t* elem){
 	write(fp, (char*)&attr, sizeof(uint16_t));
 }
 
+void to_stl1(net_t net, const char* file_name){
+    char max_file_name[1024] = {};
+    strcat(max_file_name, file_name);
+    strcat(max_file_name + strlen(file_name), ".stl");
+    int fd = open (max_file_name, O_TRUNC | O_CREAT | O_RDWR, S_IRWXU);
+    print_stl_header(fd);
+    unsigned int i, cnt = net.elems.count;
+    write(fd, (char*)&cnt, sizeof(unsigned int));
+    int elem_cnt = net.elems.count, j;
+    for (j = 0; j < elem_cnt; j++)
+        print_stl_block(fd, net.elems.elems[j]);
+
+    close(fd);
+    return;
+}
+
 void to_stl(nets_t nets, const char* file_name){
 	char max_file_name[1024] = {};
 	strcat(max_file_name, file_name);

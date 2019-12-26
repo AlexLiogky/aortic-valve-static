@@ -14,6 +14,7 @@ void save_coord(nets_t nets, char* file_name);
 void plot(nets_t nets, char* file_name);
 
 //save nets in stl format into file "file_name"
+void to_stl1(net_t net, const char* file_name);
 void to_stl(nets_t nets, const char* file_name);
 
 //save serialized nets container into file "file_name"

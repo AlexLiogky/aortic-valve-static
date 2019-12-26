@@ -177,7 +177,7 @@ net_t read_net_from_stl(const char* file_name){
 	return net;
 }
 
-bnds_t read_bnds(char* f_name){
+bnds_t read_bnds(const char* f_name){
 	if (strcmp(f_name + strlen(f_name) - strlen(".bnd"), ".bnd")){
 		perror("Unknown file type\n");
 		bnds_t bnds = {0};

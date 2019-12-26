@@ -300,3 +300,8 @@ spring_t* get_shared_spring(net_t net, node_t* n1, node_t* n2)
     return NULL;
 }
 
+void net_t_set_thickness(net_t net, double thickness){
+    for (int i = 0; i < net.vrtx.count; ++i)
+        net.vrtx.nodes[i]->h = thickness;
+}
+

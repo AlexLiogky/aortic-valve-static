@@ -22,6 +22,8 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O0  -g -std=c++17")
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -O0  -g -std=c++17")
 set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3 -std=c++17")
 
+#message("build_type = ${CMAKE_BUILD_TYPE}")
+
 
 link_directories(${ANI_DIR}/lib)
 link_directories(${BULLET_DIR}/bin)
@@ -73,7 +75,6 @@ add_executable(${EXEC_NAME} ${SOURCE_FILES} )
 
 #set(BUG_NAME buger)
 #add_executable(${BUG_NAME} test.cpp)
-
 target_link_libraries(${EXEC_NAME} -lfrtprm-3.0 -lmba3D-3.0 -laft3D-3.0 -llapack-3.2 -llapack_ext-3.2 -lblas -lgfortran -lm -lstdc++fs)
 target_link_libraries(${EXEC_NAME} -lSDL -lGL -lGLU -lSDL_image)
 target_link_libraries(${EXEC_NAME} -lgsl -lgslcblas)

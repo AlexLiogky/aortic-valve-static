@@ -40,6 +40,8 @@ struct SewEnergyParams{
     //Additional factor increasing energy from concavities
     //The more factor, the less concavities
     double convexity_w = 10;
+    double force_w = 0.0;
+    double shift = 0.5;
     struct EnergyMinimizerParams {
         //solver params - sp
         int freq = 50;
@@ -63,11 +65,13 @@ struct SolverParams{
     double eps = 0.001;                         //stop condition
     double max_possible_shift_scale = 200;
     double max_possible_recommend_shift_scale = 200;
+    double max_time = 7200;
 };
 
 struct ObjectTraits{
     int elastic_model_type = EMOD_MSM;          //number of used elastic model
     std::vector<double> elastic_model_params;   //coefficients of model
+    double thickness = 0.5;
     double pressure = 80.0;                     //pressure acted on object
     double collision_margin = 0.05;             //The distance at which collision detection is turned on
     int renderLabel = 0;

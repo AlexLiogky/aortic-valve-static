@@ -4,10 +4,42 @@
 #include "bound-box.h"
 #include "NetSpliter.h"
 
-//закомменчена функиция обсчёта
+//закомменчена функция обсчёта
 
+int _extend_vector_to_size(std::vector<double>& v, int size, double default_val){
+    if (v.size() >= size) return 0;
+    if (v.size() == 0){
+        v.resize(size);
+        for (int i = 0; i < size; ++i)
+            v[i] = default_val;
+        return size;
+    }else{
+        int j = v.size();
+        v.resize(size);
+        for (int i = j; i < size; ++i)
+            v[i] = v[j-1];
+        return size - j;
+    }
+}
+
+std::vector<double> get_extend_vector(int size, double default_val){
+    std::vector<double> margins;
+    _extend_vector_to_size(margins, size, default_val);
+    return std::move(margins);
+}
+
+void World::_extend_margin(bool warning){
+    const double default_margin = 0.1;
+    int status = _extend_vector_to_size(m_mrg, m_dynamic_nets.count + m_static_nets.count, default_margin);
+    if (warning && status)
+        std::cout << "Warning: not all margins setted for object in \"World\"\n";
+}
 
 World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft, double margin):
+        World(dynamic_nets, static_nets, cond, solver_data, drop_thr, max_shft, get_extend_vector(dynamic_nets.count + static_nets.count, margin))
+{}
+
+World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft, std::vector<double> margins):
     m_dynamic_nets{dynamic_nets},
     m_static_nets{static_nets},
     m_union_nets{create_union_net(dynamic_nets, static_nets)},
@@ -16,11 +48,12 @@ World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver
     m_statistic{statistical_data_construct(dynamic_nets)},
     m_allow_shift{drop_thr},
     m_max_shift{max_shft},
-    m_mrg{margin}
+    m_mrg{margins}
 {
+    _extend_margin(true);
     m_collision.reserve(m_union_nets.count);
     for (unsigned int i = 0; i < m_dynamic_nets.count; ++i)
-        m_collision.push_back(new Net_Wraper(m_dynamic_nets.nets[i], m_conditions.P, m_solver_data.delta, m_mrg));
+        m_collision.push_back(new Net_Wraper(m_dynamic_nets.nets[i], m_conditions.P, m_solver_data.delta, m_mrg[i]));
     for (auto& i: m_collision)
         i->setElasticModel(m_solver_data.ElasticModelType);
 
@@ -29,7 +62,7 @@ World::World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver
 
 
     for (unsigned int i = 0; i < m_static_nets.count; ++i)
-        convert_net_to_btTriangleMesh(m_static_nets.nets[i]);
+        convert_net_to_btTriangleMesh(m_static_nets.nets[i], m_mrg[i + m_dynamic_nets.count]);
 
                     //addTestBvh();
 
@@ -175,7 +208,7 @@ net_t split_net_to_Aabb(const net_t& net, const double brds[3][2])
 }
 
 #include "save-data.h"
-void World::convert_net_to_btTriangleMesh(net_t& st)
+void World::convert_net_to_btTriangleMesh(net_t& st, double mrg)
 {
     //_convert_net_to_btTriangleMesh(st);
     double brds[3][2];
@@ -201,10 +234,10 @@ void World::convert_net_to_btTriangleMesh(net_t& st)
     //nets.nets[0] = preBodies[4];
     //to_stl(nets, (char*)"results/aorta_slice4");
     for (auto i: preBodies)
-        _convert_net_to_btTriangleMesh(NetSpliter::getExtendedNodeArray(i));
+        _convert_net_to_btTriangleMesh(NetSpliter::getExtendedNodeArray(i), mrg);
 }
 
-void World::_convert_net_to_btTriangleMesh(net_t st)
+void World::_convert_net_to_btTriangleMesh(net_t st, double mrg)
 {
     const int totalTriangles = st.elems.count;
     const int totalVerts = st.vrtx.count;
@@ -239,7 +272,7 @@ void World::_convert_net_to_btTriangleMesh(net_t st)
 	btTriangleIndexVertexArray* indexVertexArrays = triangle_index_split_net_to_Aabb(st, brds);*/
     bool useQuantizedAabbCompression = true;
     btBvhTriangleMeshShape* meshShape = new btBvhTriangleMeshShape(indexVertexArrays, useQuantizedAabbCompression);
-    meshShape->setMargin(m_mrg);//16);
+    meshShape->setMargin(mrg);//16);
     meshShape->buildOptimizedBvh();
     btCollisionObject* newOb = new btCollisionObject();
     btTransform tr;
@@ -446,10 +479,22 @@ void World::setSolverData(solver_t data)
     }
 }
 
-std::vector<node_t*> World::getCollision(double mrg)
+std::vector<node_t*> World::getCollision(double mrg){
+    std::vector<double> margins;
+    _extend_vector_to_size(margins, m_collision.size(), mrg);
+    return getCollision(margins);
+}
+
+std::vector<node_t*> World::getCollision(std::vector<double>& mrg)
 {
-    for (auto& net: m_collision)
-        net->setMargin(mrg);
+    _extend_vector_to_size(mrg, m_collision.size(), 0.1);
+    std::vector<double> pre_mrgs;
+    pre_mrgs.reserve(m_collision.size());
+    int ii = 0;
+    for (auto& net: m_collision) {
+        pre_mrgs.push_back(net->getMargin());
+        net->setMargin(mrg[ii++]);
+    }
 
     /*double shift = m_collision[0]->computeFreeNexts();
     relaxation(m_union_nets, sqrt(m_allow_shift / shift));
@@ -464,8 +509,8 @@ std::vector<node_t*> World::getCollision(double mrg)
     for (int i = 0, cnt = m_collision[0]->m_scontacts.size(); i < cnt; ++i)
         res.push_back(m_collision[0]->m_scontacts[i].m_node);
 
-    for (auto& net: m_collision)
-        net->setMargin(m_mrg);
+    for (int i = 0; i < m_collision.size(); ++i)
+        m_collision[i]->setMargin(pre_mrgs[i]);
 
     return res;
 }

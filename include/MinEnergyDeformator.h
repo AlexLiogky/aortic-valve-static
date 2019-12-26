@@ -137,7 +137,7 @@ private:
             double loc_df[3] = { 0 };
             for (auto& en: m_node_energy)
                 en->operator()(m_mesh, i, loc_df);
-            set_templated(&m_node_map[i], 1, df, loc_df);
+            set_templated(&m_node_map[m_mesh.vrtx.nodes[i]->id], 1, df, loc_df);
         }
     }
 
@@ -245,5 +245,6 @@ public:
 void set_default_length_constr(MinEnergyDeformator& m, double weight);
 void set_default_digedral_angle_constr(MinEnergyDeformator& m, double weight, double scale = 1.0, bool convexity = true);
 void set_plane_constr(MinEnergyDeformator& m, double weight, const point_t& normal, double b);
+void set_isotrop_force(MinEnergyDeformator& m, double weight, const point_t& force);
 
 #endif

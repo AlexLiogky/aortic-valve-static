@@ -128,6 +128,8 @@ nets_t cpy_nets(nets_t nets);
 //if there is no such spring then return NULL
 spring_t* get_shared_spring(net_t net, node_t* n1, node_t* n2);
 
+void net_t_set_thickness(net_t net, double thickness);
+
 #ifdef __cplusplus
 }
 #endif

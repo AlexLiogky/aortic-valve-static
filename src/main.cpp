@@ -40,6 +40,7 @@
 #include <fstream>
 #include <iostream>
 #include <map>
+#include <algorithm>
 
 #include "MinEnergyDeformator.h"
 using namespace std;
@@ -108,6 +109,10 @@ point_t _triag_center(point_t triag[3]){
     return res;
 }
 
+string to_string(point_t p){
+    return "(" + to_string(p.coord[0]) + ", " + to_string(p.coord[1]) + ", " + to_string(p.coord[2]) + ")";
+}
+
 void min_energ_to_bnd(net_t& leaf, point_t att[2], point_t blood, point_t center){
     point_t n[2];
     for (int i = 0; i < 2; ++i)
@@ -115,11 +120,18 @@ void min_energ_to_bnd(net_t& leaf, point_t att[2], point_t blood, point_t center
     SCAL_S(-1, &n[1]);
 
     MinEnergyDeformator m(leaf);
-    set_plane_constr(m, 1.0, n[0], DOT(center, n[0]));
-    set_plane_constr(m, 1.0, n[1], DOT(center, n[1]));
-    set_default_length_constr(m, 1.0);
-    set_default_digedral_angle_constr(m, 0.7, 10);
-    m.find_minimum_energy_df(50, 1.e-4, 1.e-4, /*5.e-2*/1e-2, /*3001*/301, 3);
+    SewEnergyParams& sep = gPrms.sep;
+    set_plane_constr(m, sep.plane_w, n[0], DOT(center, n[0]));
+        gLog << "  plane: n = " << to_string(n[0]) << ", x0 = " << to_string(center) << std::endl;
+    set_plane_constr(m, sep.plane_w, n[1], DOT(center, n[1]));
+        gLog << "  plane: n = " << to_string(n[1]) << ", x0 = " << to_string(center) << std::endl;
+    set_default_length_constr(m, sep.sqr_length_w);
+    set_default_digedral_angle_constr(m, /*sep.digedral_angle_w*/0.7, /*sep.convexity_w*/1.0);
+    point_t wind = NORM(SCAL_SUM(-0.3, NORM(blood), 1.0, SCAL_SUM(0.5, n[0], 0.5, n[1])));
+        gLog << "  plane: wind = " << to_string(wind) << std::endl;
+    set_isotrop_force(m, gPrms.sep.force_w, wind);
+    SewEnergyParams::EnergyMinimizerParams& emp = sep.sp;
+    m.find_minimum_energy_df(emp.freq, emp.step_sz, emp.tol, emp.epsabs, emp.maxits, emp.time);
 }
 
 void shift_free_mesh(net_t leaf, double scale, const point_t shift){
@@ -131,7 +143,83 @@ void shift_free_mesh(net_t leaf, double scale, const point_t shift){
     }
 }
 
-void energetical_sew_leaf(net_t leafs[3], point_t att[3][2], point_t blood){
+int fit_mid_points(bnds_t& bnds, point_t cntr, point_t axis, point_t mids[3][2], double scale){
+    point_t e0 = NORM(CROSS(axis, CROSS(DIF(bnds.bnds[0].line[0], cntr), axis)));
+    point_t e1 = NORM(CROSS(axis, e0));
+    double phi[3][2] = {};
+    double dphi = 0;
+    for (int ii = 0 ; ii < bnds.cnt; ++ii) {
+        point_t e00 = NORM(CROSS(axis, CROSS(DIF(bnds.bnds[ii].line[0], cntr), axis)));
+        point_t e10 = NORM(CROSS(axis, e00));
+        point_t loc = DIF(bnds.bnds[ii].line[0], cntr);
+        phi[ii][0] = phi[ii][1] = std::atan2(DOT(e10, loc), DOT(e00, loc));
+        for (int i = 1; i < bnds.bnds[ii].pnt_cnt; ++i) {
+            loc = DIF(bnds.bnds[ii].line[i], cntr);
+            double _phi = std::atan2(DOT(e10, loc), DOT(e00, loc));
+            if (_phi < phi[ii][0]) phi[ii][0] = _phi;
+            else if (_phi > phi[ii][1]) phi[ii][1] = _phi;
+        }
+        if (phi[ii][1] - phi[ii][0] > M_PI) {
+            phi[ii][0] += 2 * M_PI;
+            std::swap(phi[ii][0], phi[ii][1]);
+        }
+        double ddphi = atan2(DOT(e00, e1), DOT(e00, e0));
+        phi[ii][0] += ddphi, phi[ii][1] += ddphi;
+        if (phi[ii][0] < dphi) dphi = phi[ii][0];
+    }
+    for (int i = 0; i < 6; ++i)
+        phi[i%3][i%2] -= dphi;
+    std::vector<std::pair<double*, int>> s = {{phi[0], 0}, {phi[1], 1}, {phi[2], 2}};
+    struct {
+        bool operator()(std::pair<double*, int> a, std::pair<double*, int> b) const
+        {
+            return a.first[0] < b.first[0];
+        }
+    } customLess;
+    std::sort(s.begin(), s.end(), customLess);
+    int nmap[3] = {0, 2, 1};    //сумма индексов кусков минус один
+    double pmids[3];
+    double pdifs[3];
+    int err = 0;
+
+        pmids[nmap[s[0].second + s[1].second - 1]] = (s[0].first[1] + s[1].first[0]) / 2;
+        pdifs[nmap[s[0].second + s[1].second - 1]] = fabs(s[0].first[1] - s[1].first[0]) / 2;
+
+    if (s[0].first[1] > s[1].first[0]) {
+        std::cout << "Warning: fields " << s[0].second << ", " << s[1].second << " doesn't separable\n", err = -1;
+        pdifs[nmap[s[0].second + s[1].second - 1]] = 0;
+    }
+    {
+        pmids[nmap[s[1].second + s[2].second - 1]] = (s[1].first[1] + s[2].first[0]) / 2;
+        pdifs[nmap[s[1].second + s[2].second - 1]] = fabs(s[1].first[1] - s[2].first[0]) / 2;
+    }
+    if (s[1].first[1] > s[2].first[0]) {
+        std::cout << "Warning: fields " << s[1].second << ", " << s[2].second << " doesn't separable\n", err = -1;
+        pdifs[nmap[s[1].second + s[2].second - 1]] = 0;
+    }
+    {
+        pmids[nmap[s[2].second + s[0].second - 1]] = (s[0].first[0] -( 2*M_PI - s[2].first[1])) / 2;
+        pdifs[nmap[s[2].second + s[0].second - 1]] = (s[0].first[0] +( 2*M_PI - s[2].first[1])) / 2;
+    }
+    if (s[2].first[1] > 2 * M_PI){
+        std::cout << "Warning: fields " << s[2].second << ", " << s[0].second << " doesn't separable\n", err = -1;
+        pdifs[nmap[s[2].second + s[0].second - 1]] = 0;
+    }
+    for (int i = 0; i < 3; ++i)
+        pmids[i] += dphi;
+    point_t n;
+    for (int i = 0; i < 6; ++i) {
+        double psi = pmids[(i % 3 + i % 2 + 2) % 3] -
+                     (1 - 2 * (i % 2)) * pdifs[(i % 3 + i % 2 + 2) % 3] / 2.0;
+        mids[i % 3][(i + 1) % 2] = SUM(cntr,  SCAL_SUM(scale * cos(psi), e0, scale * sin(psi), e1));
+//        n = CROSS(axis, SCAL_SUM(scale * cos(psi), e0, scale * sin(psi), e1));
+//        std::cout << to_string(n) << std::endl;
+    }
+
+    return err;
+}
+
+void  energetical_sew_leaf(net_t leafs[3], point_t att[3][2], point_t blood, bnds_t* bnds = nullptr){
     int neigh_id[6] = {0, 1, 2, 3, 4, 5};
     double lens[6];
     for (int i = 0; i < 6; ++i)
@@ -167,7 +255,7 @@ void energetical_sew_leaf(net_t leafs[3], point_t att[3][2], point_t blood){
     double R = LEN(DIF(triag[0], center));
 
     for (int i = 0; i < 3; ++i)
-        shift_free_mesh(leafs[i], /*-1.0*/-0.05 * R, NORM(blood));
+        shift_free_mesh(leafs[i], /*-1.0*/gPrms.sep.shift * R, NORM(blood));
 
     /*nets_t leaflet = nets_t_get_net(3);
     for (int i = 0; i < 3; ++i)
@@ -176,14 +264,20 @@ void energetical_sew_leaf(net_t leafs[3], point_t att[3][2], point_t blood){
 	to_stl(leaflet, "shift");
 	exit(-2);*/
 
+    gLog << "Sewing started: \n";
+    if (bnds != nullptr)
+        fit_mid_points(*bnds, center, blood, att, R);
+
     for (int i = 0; i < 3; ++i){
-        point_t shift = SUM(DIF(att[i][0], mids[i * 2]), DIF(att[i][1], mids[i * 2 + 1]));
+            gLog << " Leaflet["<< i << "]: ";
+        point_t shift = ZERO();//SUM(DIF(att[i][0], mids[i * 2]), DIF(att[i][1], mids[i * 2 + 1]));
+            gLog << "shift = " << to_string(shift) << "\n";
         min_energ_to_bnd(leafs[i], att[i], blood, SUM(center, shift));
     }
 
 }
 
-nets_t get_system(nets_t aorta, char* bnd, point_t blood_direction, char* leaf1, char* leaf2, char* leaf3){
+nets_t get_system(nets_t aorta, const char* bnd, point_t blood_direction, const char* leaf1, const char* leaf2, const char* leaf3){
 	point_t shift = blood_direction;
 
 	point_t init_points[2], final_points[3][2];
@@ -213,7 +307,7 @@ nets_t get_system(nets_t aorta, char* bnd, point_t blood_direction, char* leaf1,
 
 	nets_t leaflet1 = formated_in(leaf1);
 	nets_t_set_relax_state(leaflet1, fiber_direction);
-	to_stl(leaflet1, (char*)LEAF_STL);
+	to_stl(leaflet1, (gPrms.ro.res_dir + "relaxed.stl").c_str());
 	init_points[0] = leaflet1.nets[0].vrtx.nodes[1][0].coord;
 	init_points[1] = leaflet1.nets[0].vrtx.nodes[4][0].coord;
 	final_points[0][0] = commissur[1];
@@ -245,17 +339,19 @@ nets_t get_system(nets_t aorta, char* bnd, point_t blood_direction, char* leaf1,
 	leaflet.nets[1] = leaflet2.nets[0];
 	leaflet.nets[2] = leaflet3.nets[0];
 	leaflet.nets[3] = aorta.nets[0];
+	for (int i = 0; i < gPrms.ots.size() && 3; ++i)
+	    net_t_set_thickness(leaflet.nets[i], gPrms.ots[i].thickness);
 	net_t_set_state(&leaflet.nets[3], 1);
 	precomputation(leaflet);
 
 	leaflet.count = 3;
-	to_stl(leaflet, "start");
+	to_stl(leaflet, (gPrms.ro.res_dir + "start").c_str());
 	leaflet.count = n_objects;
-	energetical_sew_leaf(leaflet.nets, final_points, blood_direction);
+	energetical_sew_leaf(leaflet.nets, final_points, blood_direction, &bnds);
 	leaflet.count = 3;
-	to_stl(leaflet, "minim");
+	to_stl(leaflet, (gPrms.ro.res_dir + "minim").c_str());
 	leaflet.count = n_objects;
-	exit(-1);
+	//exit(-1);
 
 	return leaflet;
 	//return aorta;
@@ -286,7 +382,7 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 	double h_c = nets_t_get_coapt_intersect_depth(curleaflet, &_pow);
                                         set_contact_recognition_resolution(recognition * 0.1);
     printf("l_free[leaf] = {%lg, %lg, %lg}\n", l_free[0], l_free[1], l_free[2]);
-	printf("%s: h = %lg, h_c = %lg\n", OUTPUT, h, h_c);
+	printf("%s: h = %lg, h_c = %lg\n", gPrms.ro.res_dir.c_str(), h, h_c);
         gLog << "l_free[leaf] = { " <<  l_free[0] << ", " << l_free[1] << ", " << l_free[2] << " }\n";
         gLog << "0-th level:\n" << " h = " << h << "\n";
         gLog << " h_c = " << h_c << ", count of central points = " << _pow << endl;
@@ -329,8 +425,8 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
         for (unsigned int i = 0; i < leaflet.count; ++i)
             h_mid[i] = (p_area[2 * ((i + 2) % 3) + 0] + p_area[2 * i + 1]) / l_free[i];
                 gLog << " h_mid[leaf] = { " <<  h_mid[0] << ", " << h_mid[1] << ", " << h_mid[2] << " }\n";
-		printf("%s: h = %lg, h_c = %lg, S_max = %lg, S_min = %lg\n", OUTPUT, h, h_c, S_max, S_min);
-		printf("%s: h_mid[leaf] = { %lg, %lg, %lg }\n", OUTPUT, h_mid[0], h_mid[1], h_mid[2]);
+		printf("%s: h = %lg, h_c = %lg, S_max = %lg, S_min = %lg\n", gPrms.ro.res_dir.c_str(), h, h_c, S_max, S_min);
+		printf("%s: h_mid[leaf] = { %lg, %lg, %lg }\n", gPrms.ro.res_dir.c_str(), h_mid[0], h_mid[1], h_mid[2]);
 	}
 }
 
@@ -517,9 +613,10 @@ void run_comupationT(TT* s, unsigned int maxtime_sec = 3600 * 24){
 		gluPerspective(angle,1280.0/800.0,1,1000);
 	glMatrixMode(GL_MODELVIEW);
 	glEnable(GL_DEPTH_TEST);
-	camera_t* cam = camera_t_construct(point_t_get_point(3.35825, 9.48692, -91.156));//-45.8, -22, 34.6));//3.35825, 9.48692, -91.156));//(-45.8, -22, 34.6));//2.79514, 3.93931, 33.3655));//-3.68549, 11.6567, -2.46957));//-45.8, -22, 34.6));
-	cam->camPitch = 0.2;//1;//-8;//4.4;//-62.8;//-8;
-	cam->camYaw = 312.4;//318.6;//308;//7.4;//178;//308;
+	auto& orig = gPrms.cp.origin;
+	camera_t* cam = camera_t_construct(point_t_get_point(orig[0], orig[1], orig[2]));//-45.8, -22, 34.6));//3.35825, 9.48692, -91.156));//(-45.8, -22, 34.6));//2.79514, 3.93931, 33.3655));//-3.68549, 11.6567, -2.46957));//-45.8, -22, 34.6));
+	cam->camPitch = gPrms.cp.pitch;//1;//-8;//4.4;//-62.8;//-8;
+	cam->camYaw = gPrms.cp.yaw;//318.6;//308;//7.4;//178;//308;
 	//point_t_dump(camera_t_getVector(cam));
 
 	start = SDL_GetTicks();
@@ -570,7 +667,7 @@ void run_comupationT(TT* s, unsigned int maxtime_sec = 3600 * 24){
                         }
                         case SDLK_s:
                         {
-                            to_stl(s->m_dynamic_nets, "cur_net");
+                            to_stl(s->m_dynamic_nets, (gPrms.ro.res_dir + "cur_net").c_str());
                             break;
                         }
                         case SDLK_BACKSPACE:
@@ -632,144 +729,44 @@ void prepare_anisotrop_three_leaflet(nets_t valve, point_t direction)
 //######################################################################
 //######################################################################
 int main(int argc, char* argv[]){
-    //gPrms.InputProcessorInit(argc, argv);
-    /*point_t p[3] = {VEC(0, 0, 0), VEC(0, 1, 0), VEC(1, 0, 0)};
-    point_t D[3];
-    point_t n = point_t_or_area(p[0], p[1], p[2]);
-    printf("normal = "); point_t_dump(n);
-    for (int j = 0; j < 3; ++j){
-        D[j] = get_ortho_vector(p[(j+1)%3], p[(j + 2)%3], p[(j)%3]);
-        printf("D[%d] = ", j); point_t_dump(D[j]);
-        printf("LEN(D[%d]) = %lg\n", j, LEN(D[j]));
-        printf("D * n = %lg\n", DOT(D[j], n));
-        }
-    point_t resp = ZERO();
-    for (int j = 0; j < 3; ++j)
-        ADD_S(&resp, ((j == 0)? 1: 1) * DOT(D[0], D[j]), p[j]);
-        //ADD_S(&resp, -DOT(resp, n), n);
-    point_t_dump(resp);
+    gPrms.InputProcessorInit(argc, argv);
+    gLog.open(gPrms.ro.log_name, ios::trunc);
+    gLog << to_string(gPrms);
 
-
-
-    return 0;*/
-    std::string directory = "/home/alex/Desktop/MV/valve model-static/Aortic-Valve/data/templates/";//"/home/alex/Desktop/MV/valve model-static/Aortic-Valve/src/additional/simple_rectangle/";//"/home/alex/Desktop/MV/valve model-static/Aortic-Valve/src/additional/Haj-mesh/template-30/";//"/home/alex/Desktop/MV/valve model-static/Aortic-Valve/data/mesh-templates/";//"/home/alex/Desktop/MV/valve model-static/Aortic-Valve/src/additional/Haj-mesh/template-20/";
-    std::string leaffile = "ozaki-19.txt";//"half-disk.txt";//"rectangle";////"templ-27-1200.txt";//"haj-valve";
-    std::string aortafile = "aorta.nts";
-    std::string res_fname = leaffile + "-res";
-    std::string res_dir = "Results/results-26/";//"results2/";//"haj-results/";
-    int nres = 1;
-    long int tm = time(NULL);
-    res_fname += "-" + to_string(tm);
-    std::string logfile = leaffile + "-" + to_string(tm) + "_log.txt";
-
-    switch (argc)
-    {
-        case 1: break;
-        case 6: logfile = string(argv[5]);
-        case 5: res_dir = string(argv[4]);
-                if (res_dir[res_dir.length() - 1] != '/')
-                    res_dir += "/";
-        case 4: res_fname = string(argv[3]);
-        case 3: leaffile = string(argv[2]);
-        case 2: directory = string(argv[1]);
-                if (directory[directory.length() - 1] != '/')
-                    directory += "/";
-                break;
-        default:
-            cout << "Wrong input\n";
-            cout << "Usage: " << argv[0] << " <directory_name> <fname> <result file name> <result directory> <logfile name>\n\n";
-            return 0;
-    }
-
-    switch (argc)
-    {
-        case 1: cout << "Input directory: " << directory << "\n";
-        case 2: cout << "Input file name: " << leaffile << "\n";
-        case 3: cout << "Result file name: " << res_fname + "-<#res>\n";
-        case 4: cout << "Result directory: " << res_dir << "\n";
-        case 5: cout << "Logfile: " << res_dir + logfile << "\n";
-        default: break;
-    }
-
-    gLog.open(res_dir + logfile, ios::trunc);
-
-//        gLog << "Open " << directory << leaffile << endl;
-//    nets_t test0 = formated_in((directory + leaffile).c_str());//"/home/alex/Desktop/MV/valve model-static/Aortic-Valve/src/additional/Labrosse-mesh-generator/sample");
-//    to_stl(test0, "leaf"); exit(0);
-
-//    net_t aort = read_net_from_stl("/home/alex/Desktop/MV/valve model-static/Aortic-Valve/data/aorta-75/aorta.stl");
-//    for (int i = 0; i < aort.elems.count; ++i)
-//        aort.elems.elems[i]->coef *= -1;
-//    nets_t aorta_ = nets_t_get_net(1);
-//    aorta_.nets[0] = aort;
-//    save_nets_to_file(aorta_, "aorta");
-//    exit(0);
-
-    nets_t aorta = download_aorta(("/home/alex/Desktop/MV/valve model-static/Aortic-Valve/data/aorta-75/" + aortafile).c_str());
-    /*for (int i = 0; i < aorta.nets[0].elems.count; ++i)
-        std::swap(aorta.nets[0].elems.elems[i]->vrts[0], aorta.nets[0].elems.elems[i]->vrts[1]);*/
+    nets_t aorta = download_aorta(gPrms.a_in.aorta_file.c_str());
 	printf("elems.count = %u\n", aorta.nets[0].elems.count);
 	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-	point_t shift = point_t_get_point(0.767, 0.090, -0.636);//(0.714, 0.127, -0.688);//(5, 1, -3.3);//(7.77, 1.73, -6.05);//(5, 1, -3.3);
-	nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)(directory + "ozaki-29.txt").c_str(), (char*)(directory + "ozaki-25.txt").c_str(), (char*)(directory + "ozaki-27.txt").c_str());
-	//nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)(directory + leaffile).c_str(), (char*)(directory + leaffile).c_str(), (char*)(directory + leaffile).c_str());
-	nets_t test = nets_t_get_net(3);
-    for (int i = 0; i < 3; ++i) test.nets[i] = leaflet.nets[i];
-    to_stl(test, "minim");
-    //return 0;
-
-//    nets_t test = formated_in((directory + leaffile).c_str());
-//    point_t anisotrop = point_t_get_point(0, 0, 1);
-//    point_t shift = point_t_get_point(0, 0, 1);
-
-
-//    test = create_next_hierarchical_nets(test);
-//    test.count = 1;
-//    to_stl(test, "leaf2");
-//    std::ofstream connect_("map2");
-//    for (int j = 0; j < test.nets[0].vrtx.count; ++j)
-//    {
-//        node_t* i = test.nets[0].vrtx.nodes[j];
-//        connect_ << i->id << " " << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
-//    }
-//    return 0;
-
-
-//    for (unsigned int i = 0; i < test.count && i < 3; ++i)
-//    {
-//        for (unsigned int j = 0; j < test.nets[i].vrtx.count; ++j)
-//            test.nets[i].vrtx.nodes[j]->h = 0.3;
-//    }
+	auto& bl_flow = gPrms.a_in.main_flow_direction;
+	point_t shift = point_t_get_point(bl_flow[0], bl_flow[1], bl_flow[2]);//(0.714, 0.127, -0.688);//(5, 1, -3.3);//(7.77, 1.73, -6.05);//(5, 1, -3.3);
+	nets_t leaflet = get_system(aorta, gPrms.a_in.leaflet_boundaries.c_str(), shift,
+	        gPrms.l_ins[0].leaflet_file.c_str(), gPrms.l_ins[1].leaflet_file.c_str(), gPrms.l_ins[2].leaflet_file.c_str());
+	nets_t test = nets_t_get_net(leaflet.count-1);
+    for (int i = 0; i < leaflet.count-1; ++i) test.nets[i] = leaflet.nets[i];
+    to_stl(test, (gPrms.ro.res_dir + "minim").c_str());
 
         gLog << "Elems per net = " << test.nets[0].elems.count << "\n";
         gLog << "Nodes per net = " << test.nets[0].vrtx.count << "\n";
         gLog << "Springs per net = " << test.nets[0].springs.count << "\n";
         gLog << "Initial full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
-//    nets_t static_nets = nets_t_get_net(0);
     nets_t static_nets = aorta;
     nets_t dynamic_nets = test;
-        //to_stl(dynamic_nets, (res_dir + res_fname + "-" + to_string(nres++)).c_str()); return 0;
-
-
-//    prepare_anisotrop_three_leaflet(dynamic_nets, anisotrop);
-//    precomputation(dynamic_nets);
-//    nets_t_set_relax_state(dynamic_nets, point_t_get_point(1, 0, 0));
-
 
     printf("len = %lg\n", net_t_get_len_free_edge(test.nets[0]));
         gLog << "Initial free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << "\n";
         gLog << "Fixed len net = " << net_t_get_len_fix_edge(test.nets[0]) << endl;
-    solver_t solver_data = {5.5e-7, 0.001, EMOD_NEOGOOK}; //1e-7//25e-7
+//TODO: сейчас модель хранится как параметр задачи, но нужно сделать так, чтобы модель была параметром объекта и притом имела память о своих параметрах
+    solver_t solver_data = {gPrms.sp.delta, gPrms.sp.eps, gPrms.ots[0].elastic_model_type}; //1e-7//25e-7
         gLog << "eps = " << solver_data.eps << "\n";
         gLog << "ElasticType = " << solver_data.ElasticModelType << "\n";
         gLog << "delta = " << solver_data.delta << "\n";
-    wrld_cnd_t conditions = {100};
+    wrld_cnd_t conditions = {gPrms.ots[0].pressure};
         gLog << "P = " << conditions.P << endl;
-    World s(dynamic_nets, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift, 0.05);
-    //update_nets(test);
+    double coef1 = gPrms.sp.max_possible_recommend_shift_scale, coef2 = gPrms.sp.max_possible_shift_scale;
+//TODO: DONE: сделать приём массива марджинов для всех тел в World
+    World s(dynamic_nets, static_nets, conditions, solver_data, coef2*Allow_shift, coef1*Max_shift, gPrms.ots[0].collision_margin);
     struct timeval start1, end1;
     gettimeofday(&start1, NULL);
-    run_comupationT(&s, 3600 * 2);
+    run_comupationT(&s, gPrms.sp.max_time);
     gettimeofday(&end1, NULL);
     printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
     printf("Time of elastic computation = %lg ms\n", gt_elastic);
@@ -778,30 +775,11 @@ int main(int argc, char* argv[]){
         gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
         gLog << "Time of elastic computation = " << gt_elastic << endl;
 
-    /*solver_data.ElasticModelType = EMOD_REINFORCING;
-    //solver_data.delta = 1.0e-7;
-        gLog << "eps = " << solver_data.eps << "\n";
-        gLog << "ElasticType = " << solver_data.ElasticModelType << "\n";
-        gLog << "delta = " << solver_data.delta << "\n";
-    conditions.P = 80;
-        gLog << "P = " << conditions.P << endl;
-    s.setSolverData(solver_data);
-    s.setWorldCnd(conditions);
-    gettimeofday(&start1, NULL);
-    run_comupationT(&s, 3600 * 2);
-    gettimeofday(&end1, NULL);
-    printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
-    printf("Time of elastic computation = %lg ms\n", gt_elastic);
-        gLog << "Final full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
-        gLog << "Final free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << endl;
-        gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
-        gLog << "Time of elastic computation = " << gt_elastic << endl;*/
-        double t_temp = gt_elastic;
     std::vector<node_t*> coaptor = s.getCollision(0.11);
     std::map<int, node_t*> coapt;
     for (auto& i: coaptor)
         if (!coapt.count(i->id)) coapt.insert(std::pair<int, node_t*>(i->id, i));
-    std::ofstream off_file(res_dir + "coapt1"+ "-" + to_string(tm) +".off");
+    std::ofstream off_file(gPrms.ro.res_dir + "coapt1"+ "-" + gPrms.ro.postfix +".off");
     off_file << "OFF\n\n";
     off_file << coapt.size() << " 0 0\n";
     for (auto& j: coapt)
@@ -810,150 +788,43 @@ int main(int argc, char* argv[]){
         off_file << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
     }
     off_file.close();
-    std::ofstream connect(res_dir + "map1" + "-" + to_string(tm));
+    std::ofstream connect(gPrms.ro.res_dir + "map1" + "-" + gPrms.ro.postfix);
     for (auto& j: coapt)
     {
         node_t* i = j.second;
         connect << i->id << " " << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
     }
-
-
-    to_stl(dynamic_nets, (res_dir + res_fname + "-" + to_string(nres++)).c_str());
+//TODO: сделать сохранялку которая определяет тип сохраняемого файла по названию
+    if (gPrms.ro.divide_leaflets)
+        for (int i = 0; i < std::min((int)gPrms.ro.leaf_names.size(), (int)dynamic_nets.count); ++i)
+            to_stl1(dynamic_nets.nets[i], gPrms.ro.leaf_names[i].c_str());
+    else
+        to_stl(dynamic_nets, gPrms.ro.leaf_names[0].c_str());
 
     nets_t dynamic_nets1 = create_next_hierarchical_nets(dynamic_nets);
     precomputation(dynamic_nets1);
     dynamic_nets1 = create_next_hierarchical_nets(dynamic_nets1);
     precomputation(dynamic_nets1);
-//    World s1(dynamic_nets1, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift, 0.03);
-//    update_nets(test);
-//    gettimeofday(&start1, NULL);
-//    run_comupationT<World>(&s1, 36);
-//    gettimeofday(&end1, NULL);
-//    printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
-//    printf("Time of elastic computation = %lg ms\n", gt_elastic - t_temp);
-//        gLog << "Final full area per net = " << net_t_get_full_area(dynamic_nets1.nets[0]) << "\n";
-//        gLog << "Final free edge len per net = " << net_t_get_len_free_edge(dynamic_nets1.nets[0]) << endl;
-//        gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
-//        gLog << "Time of elastic computation = " << gt_elastic - t_temp << endl;
-//
-//    off_file.close();
-//    std::vector<node_t*> coaptor1 = s1.getCollision(0.11);
-//    std::map<int, node_t*> coapt1;
-//    for (auto& i: coaptor1)
-//        if (!coapt1.count(i->id)) coapt1.insert(std::pair<int, node_t*>(i->id, i));
-//    off_file.open(res_dir + "coapt2" + "-" + to_string(tm) + ".off");
-//    off_file << "OFF\n\n";
-//    off_file << coapt1.size() << " 0 0\n";
-//    for (auto& j: coapt1)
-//    {
-//        node_t* i = j.second;
-//        off_file << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
-//    }
-//    off_file.close();
-//    connect.close(); connect.open(res_dir + "map2" + "-" + to_string(tm));
-//    for (auto& j: coapt1)
-//    {
-//        node_t* i = j.second;
-//        connect << i->id << " " << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
-//    }
-//
-//    nets_t initleaf = formated_in((directory + leaffile).c_str());
-//    initleaf = create_next_hierarchical_nets(initleaf);
-//    initleaf.count = 1;
-//    std::ofstream coaptf(res_dir + "coaptator" + "-" + to_string(tm) + ".off");
-//    coaptf << "OFF\n\n";
-//    coaptf << coapt1.size() << " 0 0\n";
-//    for (auto& j: coapt1)
-//    {
-//        node_t* i = initleaf.nets[0].vrtx.nodes[j.second->id];
-//        coaptf << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
-//    }
-//    coaptf.close();
+    World s1(dynamic_nets1, static_nets, conditions, solver_data, coef2*Allow_shift, coef1*Max_shift, gPrms.ots[0].collision_margin);
+    gettimeofday(&start1, NULL);
+    run_comupationT(&s, gPrms.sp.max_time);
+    gettimeofday(&end1, NULL);
+    printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
+    printf("Time of elastic computation = %lg ms\n", gt_elastic);
+//    gLog << "Final full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
+//    gLog << "Final free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << endl;
+    gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
+    gLog << "Time of elastic computation = " << gt_elastic << endl;
 
-    to_stl(dynamic_nets1, (res_dir + res_fname + "-" + to_string(nres++)).c_str());
+//    if (gPrms.ro.divide_leaflets)
+//        for (int i = 0; i < std::min((int)gPrms.ro.leaf_names.size(), (int)dynamic_nets.count); ++i)
+//            to_stl1(dynamic_nets1.nets[i], gPrms.ro.leaf_names[i].c_str());
+//    else
+//        to_stl(dynamic_nets1, gPrms.ro.leaf_names[0].c_str());
     print_nets_statistic(dynamic_nets1, /*point_t_get_point(0, 0, 1)*/shift);
 
-//    collision_t collision_data = collision_data_t_construct(dynamic_nets, static_nets, 10);
-//    wrld_cnd_t conditions = {80.0};
-//    world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
-//    set_initial_solving_params(world);
-//    struct timeval start1, end1;
-//	gettimeofday(&start1, NULL);
-//    run_comupation(world);
-//    gettimeofday(&end1, NULL);
-//	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
 
     return 0;
-//	nets_t aorta = download_aorta((char*)AORTA_IN);
-//	printf("elems.count = %u\n", aorta.nets[0].elems.count);
-//	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-//	point_t shift = point_t_get_point(5, 1, -3.3);
-//	nets_t leaflet = get_system(aorta, (char*)BND_IN, shift, (char*)INPUT, (char*)INPUT, (char*)INPUT);
-//
-//    /*nets_t dynamic_nets = nets_t_get_net(3);
-//    for (int i = 0; i < 3; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
-//    nets_t static_nets = nets_t_get_net(1);
-//    static_nets.nets[0] = leaflet.nets[3];
-//    solver_t solver_data = {2e-7, 0.001};
-//    collision_t collision_data = collision_data_t_construct(dynamic_nets, static_nets, 10);
-//    wrld_cnd_t conditions = {80.0};
-//    world_t* world = world_t_construct(dynamic_nets, static_nets, solver_data , collision_data, conditions);
-//    set_initial_solving_params(world);
-//    struct timeval start1, end1;
-//	gettimeofday(&start1, NULL);
-//    run_comupation(world);
-//    gettimeofday(&end1, NULL);
-//	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));*/
-//
-//    nets_t dynamic_nets = nets_t_get_net(3);
-//    for (unsigned int i = 0; i < dynamic_nets.count; ++i) dynamic_nets.nets[i] = leaflet.nets[i];
-//    //dynamic_nets.nets[0] = leaflet.nets[1];
-//    nets_t static_nets = nets_t_get_net(1);
-//    static_nets.nets[0] = leaflet.nets[3];
-//    solver_t solver_data = {15e-7, 0.001};
-//    wrld_cnd_t conditions = {80.0};
-//    World s(dynamic_nets, static_nets, conditions, solver_data, 200*Allow_shift, 200*Max_shift);
-//    struct timeval start1, end1;
-//	gettimeofday(&start1, NULL);
-//    run_comupationT<World>(&s);
-//    gettimeofday(&end1, NULL);
-//	printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
-//	to_stl(leaflet, (char*)OUTPUT);
-//    return 0;
-//
-//	struct timeval start, end;
-//	gettimeofday(&start, NULL);
-//	double P = 80; //mm Hg
-//	double delta = 2e-7;//3e-7;
-//	printf("delta = %lg\n", delta);
-//	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-//	int max_nsteps = 28000, freq = 150;
-//	double eps = 0;
-//	//compute_nets(leaflet, P, delta, max_nsteps, eps, freq);
-//	nets_t curleaflet = get_valve_from_system(leaflet);
-//	curleaflet = create_next_hierarchical_nets(curleaflet);
-//	int jj = 3;
-//	for (unsigned int ii = 0; ii < leaflet.nets[jj].elems.count; ++ii){
-//		leaflet.nets[jj].elems.elems[ii]->coef *= -1;
-//	}
-//	to_stl(leaflet, (char*)OUTPUT);
-//	gettimeofday(&end, NULL);
-//	//printf("Time of precomputation = %ld ms\n", get_msec_time(start, end));
-//
-//	print_nets_statistic(leaflet, shift);
-//
-//	printf("P = %lg, %s\n", P, OUTPUT);
-//
-//	//world_t_destruct(world);
-//	//collision_data_t_destruct(collision_data);
-//	nets_t_destruct(curleaflet);
-//	nets_t_surfacial_free(dynamic_nets);
-//	nets_t_surfacial_free(static_nets);
-//	nets_t_surfacial_free(aorta);
-//	nets_t_destruct(leaflet);
-//
-//
-//	return 0;
 }
 //######################################################################
 //######################################################################
@@ -999,10 +870,4 @@ int main(int argc, char* argv[]){
 
 	to_stl(leaflet, "result");*/
 
-
-/*  TODO:
-    Нужно сделать проверку на неукладываемость границ в осестремительном цилиндрическом ограничении,
-    если эта проверка не проходит, то энергетическую минимизацию не производить или написать
-    версию минимизатора, который такой случай будет учитывать
-*/
 

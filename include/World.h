@@ -23,17 +23,20 @@ class World
 public:
         nets_t& getDynamicNets() { return m_dynamic_nets; }
         nets_t& getStaticNets() { return m_static_nets; }
+        World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft, std::vector<double> margins);
         World(nets_t& dynamic_nets, nets_t& static_nets, wrld_cnd_t& cond, solver_t& solver_data, double drop_thr, double max_shft, double margin = 0.1);
         void compute_nets_time(long double compute_time = 1000.0/60, int max_its = 10000);
         solver_t getSolverData() { return m_solver_data; }
         void setSolverData(solver_t data);
         void setWorldCnd(wrld_cnd_t& cond);
         std::vector<node_t*> getCollision(double mrg = 0.1); //TODO: сейчас эта функция сохряняет инфу только о магическом первом лепестке, надо это поправить
+        std::vector<node_t*> getCollision(std::vector<double>& mrg);
 
 private:
     void set_initial_solving_params();
-    void convert_net_to_btTriangleMesh(net_t& st);
-    void _convert_net_to_btTriangleMesh(net_t st);
+    void convert_net_to_btTriangleMesh(net_t& st, double mrg);
+    void _convert_net_to_btTriangleMesh(net_t st, double mrg);
+    void _extend_margin(bool warning = false);
     //void findSoftCollisions();
     //void findRigidCollisions();
     //void solveStaticCollision(btCollisionObject* b0, Net_Wraper* b1);
@@ -57,7 +60,7 @@ private:
     statistic_t m_statistic;
 	double m_allow_shift = 1;
 	double m_max_shift;
-	double m_mrg = 0.1;
+	std::vector<double> m_mrg;
 
 };
 
