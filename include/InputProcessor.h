@@ -98,6 +98,7 @@ struct RequiredOutput{
     bool divide_leaflets = true;
     vector<string> leaf_names;
     string log_name = "";
+    string test_data = "";
     //в какие файла и что сохранять
     //частоты записи
 };

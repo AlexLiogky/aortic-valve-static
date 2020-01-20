@@ -185,36 +185,40 @@ void nets_t_set_relax_state(nets_t nets, point_t fiber_dir){
     }
 }
 
+void net_t_elem_t_set_elems_neighbours(net_t net, elem_t* elem){
+    node_t** vrtx = (*elem).vrts;
+    unsigned int cnt1 = (*vrtx[0]).cnt_elems, cnt2 = (*vrtx[1]).cnt_elems, cnt3 = (*vrtx[2]).cnt_elems;
+    int cnt_neighbours = cnt1 + cnt2 + cnt3;
+    cnt_neighbours -= net_t_count_shared_elems(vrtx[0], vrtx[1], NULL);
+    cnt_neighbours -= net_t_count_shared_elems(vrtx[0], vrtx[2], NULL);
+    cnt_neighbours -= net_t_count_shared_elems(vrtx[1], vrtx[2], NULL);
+    cnt_neighbours++;
+    (*elem).cnt_neighbours = cnt_neighbours;
+    (*elem).neighbours_id = (unsigned int*) calloc(cnt_neighbours, sizeof(unsigned int));
+    unsigned int cur_id = (*elem).id;
+    unsigned int i, k = 0;
+    for (i = 0; i < cnt1; i++){
+        unsigned int neigh_id = (*vrtx[0]).elems_id[i];
+        if (neigh_id != cur_id)
+            ((*elem).neighbours_id)[k++] = neigh_id;
+    }
+    for (i = 0; i < cnt2; i++){
+        unsigned int neigh_id = (*vrtx[1]).elems_id[i];
+        if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id))
+            (*elem).neighbours_id[k++] = neigh_id;
+    }
+    for (i = 0; i < cnt3; i++){
+        unsigned int neigh_id = (*vrtx[2]).elems_id[i];
+        if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id))
+            (*elem).neighbours_id[k++] = neigh_id;
+    }
+}
+
 void net_t_set_elems_neighbours(net_t net){
 	unsigned int e_cnt = net.elems.count, j;
 	for (j = 0; j < e_cnt; j++){
 		elem_t* elem = net.elems.elems[j];
-		node_t** vrtx = (*elem).vrts;
-		unsigned int cnt1 = (*vrtx[0]).cnt_elems, cnt2 = (*vrtx[1]).cnt_elems, cnt3 = (*vrtx[2]).cnt_elems;
-		int cnt_neighbours = cnt1 + cnt2 + cnt3;
-		cnt_neighbours -= net_t_count_shared_elems(vrtx[0], vrtx[1], NULL);
-		cnt_neighbours -= net_t_count_shared_elems(vrtx[0], vrtx[2], NULL);
-		cnt_neighbours -= net_t_count_shared_elems(vrtx[1], vrtx[2], NULL);
-		cnt_neighbours++;
-		(*elem).cnt_neighbours = cnt_neighbours;
-		(*elem).neighbours_id = (unsigned int*) calloc(cnt_neighbours, sizeof(unsigned int));
-		unsigned int cur_id = (*elem).id;
-		unsigned int i, k = 0;
-		for (i = 0; i < cnt1; i++){
-			unsigned int neigh_id = (*vrtx[0]).elems_id[i];
-			if (neigh_id != cur_id)
-				((*elem).neighbours_id)[k++] = neigh_id;
-		}
-		for (i = 0; i < cnt2; i++){
-			unsigned int neigh_id = (*vrtx[1]).elems_id[i];
-			if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id))
-				(*elem).neighbours_id[k++] = neigh_id;
-		}
-		for (i = 0; i < cnt3; i++){
-			unsigned int neigh_id = (*vrtx[2]).elems_id[i];
-			if (neigh_id != cur_id && !check_uint_in((*elem).neighbours_id, k, neigh_id))
-				(*elem).neighbours_id[k++] = neigh_id;
-		}
+        net_t_elem_t_set_elems_neighbours(net, elem);
 	}
 }
 

@@ -66,7 +66,7 @@ void print_stl_header(int fd){
 }
 
 void print_stl_vec(int fp, f_point_t point){
-	write(fp, (char*)point.coord, DIM * sizeof(float));
+	write(fp, (char*)point.coord, MY_DIM * sizeof(float));
 }
 
 void print_stl_block(int fp, elem_t* elem){

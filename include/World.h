@@ -29,8 +29,9 @@ public:
         solver_t getSolverData() { return m_solver_data; }
         void setSolverData(solver_t data);
         void setWorldCnd(wrld_cnd_t& cond);
-        std::vector<node_t*> getCollision(double mrg = 0.1); //TODO: сейчас эта функция сохряняет инфу только о магическом первом лепестке, надо это поправить
-        std::vector<node_t*> getCollision(std::vector<double>& mrg);
+        using ColissionType = std::vector<std::tuple<int, int, node_t*>>;
+        ColissionType getCollision(double mrg = 0.1); //TODO: сейчас эта функция сохряняет инфу только о магическом первом лепестке, надо это поправить
+        ColissionType getCollision(std::vector<double>& mrg);
 
 private:
     void set_initial_solving_params();
@@ -42,6 +43,7 @@ private:
     //void solveStaticCollision(btCollisionObject* b0, Net_Wraper* b1);
     void addTestBvh();
     void registerCollisionWorld();
+    void updateColissionInfo();
 protected:
     double predictMotion();
     void findCollisions();

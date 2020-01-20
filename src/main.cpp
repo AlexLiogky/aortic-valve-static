@@ -24,17 +24,7 @@
 //#include "Solver.h"
 #include "World.h"
 #include "InputProcessor.h"
-
-#define RES_STL         "results/sew0"
-#define RES_LEAF_STL    "results/sew0_leaf"
-#define RES_A_L_STL     "results/sew0_aorta_leaf"
-#define INPUT           "data/mesh-templates/templ-29-1200.txt"//"templ-25-100.txt" "leaflets/leaf-1200.txt" "separate2" "leaflets.txt"
-#define OUTPUT          "results/full-res4"
-#define S_STL           "results/result11"
-#define LEAF_STL        "results/res0"
-#define AORTA_IN        "data/aorta/aorta.nts"
-#define BND_IN          "data/aorta-75/aorta_rec_bnd.bnd"//"data/aorta/aorta_rec_bnd.bnd"//"data/aorta-75/aorta_rec_bnd.bnd"
-
+#include "Meassure.h"
 #include <string>
 #include <sstream>
 #include <fstream>
@@ -725,11 +715,16 @@ void prepare_anisotrop_three_leaflet(nets_t valve, point_t direction)
         valve.nets[i].vrtx.nodes[j]->coord = p_storage[k++];
 }
 
-
 //######################################################################
 //######################################################################
 int main(int argc, char* argv[]){
+//    std::cout << "Start" << std::endl;
+//    nets_t res = download_nets_from_file("/home/alex/Desktop/MV/valve model-static/Aortic-Valve/Results/res1579025760/result.nts");
+//    to_stl(res, "/home/alex/Desktop/MV/valve model-static/Aortic-Valve/Results/res1579025760/downloaded");
+//    return 0;
+
     gPrms.InputProcessorInit(argc, argv);
+    return testMeassure(gPrms);
     gLog.open(gPrms.ro.log_name, ios::trunc);
     gLog << to_string(gPrms);
 
@@ -775,8 +770,16 @@ int main(int argc, char* argv[]){
         gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
         gLog << "Time of elastic computation = " << gt_elastic << endl;
 
-    std::vector<node_t*> coaptor = s.getCollision(0.11);
-    std::map<int, node_t*> coapt;
+    gPrms.ro.test_data = gPrms.ro.res_dir + "result";   //TODO: to configfile
+    save_nets_to_file(s.getDynamicNets(), gPrms.ro.test_data.c_str());
+
+//    World::ColissionType coaptor = s.getCollision(0.11);
+//    for (auto& i: coaptor){
+//        std::cout << std::get<0>(i) << " " << std::get<1>(i) << " ";
+//        point_t_dump(std::get<2>(i)->coord);
+//    }
+//    return 0;
+    /*std::map<int, node_t*> coapt;
     for (auto& i: coaptor)
         if (!coapt.count(i->id)) coapt.insert(std::pair<int, node_t*>(i->id, i));
     std::ofstream off_file(gPrms.ro.res_dir + "coapt1"+ "-" + gPrms.ro.postfix +".off");
@@ -793,13 +796,16 @@ int main(int argc, char* argv[]){
     {
         node_t* i = j.second;
         connect << i->id << " " << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
-    }
+    }*/
 //TODO: сделать сохранялку которая определяет тип сохраняемого файла по названию
     if (gPrms.ro.divide_leaflets)
         for (int i = 0; i < std::min((int)gPrms.ro.leaf_names.size(), (int)dynamic_nets.count); ++i)
             to_stl1(dynamic_nets.nets[i], gPrms.ro.leaf_names[i].c_str());
     else
         to_stl(dynamic_nets, gPrms.ro.leaf_names[0].c_str());
+
+    print_nets_statistic(dynamic_nets, /*point_t_get_point(0, 0, 1)*/shift);
+    return 0;
 
     nets_t dynamic_nets1 = create_next_hierarchical_nets(dynamic_nets);
     precomputation(dynamic_nets1);

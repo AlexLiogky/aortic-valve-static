@@ -5,10 +5,10 @@
 extern "C" {
 #endif
 
-#define DIM 3
+#define MY_DIM 3
 
 typedef struct point_t{
-	double coord[DIM];
+	double coord[MY_DIM];
 }point_t;
 
 point_t* point_t_construct(double x, double y, double z); 	//alloc memory and create a point
@@ -129,11 +129,11 @@ int line_fragment_to_trangle_intersection(point_t start, point_t shift, point_t 
 point_t point_to_triangle_projection(point_t point, point_t triangle[3], double* sqr_dist);
 
 typedef struct matrix3D_t{
-	double matrix[DIM][DIM];
+	double matrix[MY_DIM][MY_DIM];
 }matrix3D_t;
 
 //construct matrix from vectors as columns
-matrix3D_t matrix3D_t_get_from_points(point_t points[DIM]); //return |p1 p2 p3|
+matrix3D_t matrix3D_t_get_from_points(point_t points[MY_DIM]); //return |p1 p2 p3|
 matrix3D_t matrix3D_t_mul(matrix3D_t m1, matrix3D_t m2); //return A * B
 double matrix3D_t_det(matrix3D_t m); //return det(A)
 matrix3D_t matrix3D_t_inverse(matrix3D_t m); //return A^-1
@@ -167,7 +167,7 @@ void matrix3D_t_dump(matrix3D_t m);
 #define DIR_PROJ(vec, dir) point_to_direction_projection(vec, dir)
 
 typedef struct f_point_t{
-	float coord[DIM];
+	float coord[MY_DIM];
 }f_point_t;
 
 //convert point_t to f_point_t

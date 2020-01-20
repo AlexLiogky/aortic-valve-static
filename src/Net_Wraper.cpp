@@ -26,17 +26,21 @@ static inline btDbvtVolume VolumeOf(const elem_t* f,
 NetObject::NetCollisionObject(net_t net, Net_Wraper* body): m_body{body}, m_net{net}
 {
     m_nleaf.resize(m_net.vrtx.count);
+    _m_data1.reserve(m_net.vrtx.count);
 	for (int i = 0, ni = m_net.vrtx.count; i < ni; ++i)
 	{
 		node_t* n = m_net.vrtx.nodes[i];
-		m_nleaf[i] = m_ndbvt.insert(btDbvtVolume::FromCR(p2Bt(n->coord), m_body->getMargin()), n);
+        _m_data1.push_back(std::pair(n, body));
+		m_nleaf[i] = m_ndbvt.insert(btDbvtVolume::FromCR(p2Bt(n->coord), m_body->getMargin()), &_m_data1.back());
 	}
 
 	m_fleaf.resize(m_net.elems.count);
+    _m_data2.reserve(m_net.elems.count);
 	for (unsigned int i = 0; i < m_net.elems.count; ++i)
 	{
 		elem_t* f = m_net.elems.elems[i];
-		m_fleaf[i] = m_fdbvt.insert(VolumeOf(f, 0), f);
+        _m_data2.push_back(std::pair(f, body));
+		m_fleaf[i] = m_fdbvt.insert(VolumeOf(f, m_body->getMargin()/*0*/), &_m_data2.back()); //TODO: я здесь добавил ненулевой margin
 	}
 
     m_worldTransform.setIdentity();                                                 ////////////neccesary?
@@ -136,7 +140,9 @@ void NetObject::CollisionHandler(const btCollisionObject* pco, btVector3* triang
 
 void NetObject::ColliderStatic::Process(const btDbvtNode* leaf)
 {
-    node_t* node = (node_t*)leaf->data;
+    std::pair<node_t*, Net_Wraper*>* data = static_cast<std::pair<node_t*, Net_Wraper*>*>(leaf->data);
+    node_t* node = data->first;
+    Net_Wraper* obstr = data->second;
     btVector3* bttr = m_triangle;
     point_t n[] = {Bt2p(bttr[0]), Bt2p(bttr[1]), Bt2p(bttr[2])};
     double d = DBL_MAX;
@@ -155,14 +161,21 @@ void NetObject::ColliderStatic::Process(const btDbvtNode* leaf)
         c.m_margin = m;
         c.m_node = node;
         psb->m_body->m_rcontacts.push_back(c);
+        c.m_obstr = obstr;
     }
 }
 
 void NetObject::Collider::Process (const btDbvtNode* lnode,
                                     const btDbvtNode* lface)
 {
-    node_t* node = (node_t*)lnode->data;
-    elem_t* face = (elem_t*)lface->data;
+    std::pair<node_t*, Net_Wraper*>* data = static_cast<std::pair<node_t*, Net_Wraper*>*>(lnode->data);
+    node_t* node = data->first;
+    Net_Wraper* nobstr = data->second;
+    std::pair<elem_t*, Net_Wraper*>* edata = static_cast<std::pair<elem_t*, Net_Wraper*>*>(lface->data);
+    elem_t* face = edata->first;
+    Net_Wraper* fobstr = edata->second;
+//    node_t* node = (node_t*)lnode->data;
+//    elem_t* face = (elem_t*)lface->data;
     double d = DBL_MAX;
     point_t proj = node_to_elem_projection(node, face, &d);
 
@@ -188,6 +201,8 @@ void NetObject::Collider::Process (const btDbvtNode* lnode,
             c.m_weights = w;
             c.m_cfm[0] = ma / ms * 1;
             c.m_cfm[1] = mb / ms * 1;
+            c.m_nobstr = nobstr;/*запиши кому принадлежит узел*/;
+            c.m_fobstr = fobstr;/*запиши кому принадлежит узел*/;
             psb[0]->m_body->m_scontacts.push_back(c);
         }
     }

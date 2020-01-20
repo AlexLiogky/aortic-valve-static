@@ -24,7 +24,7 @@ point_t point_t_get_point(double x, double y, double z){
 
 int point_t_equal(point_t point1, point_t point2, double err){
 	int i, res = 1;
-	for (i = 0; i < DIM; i++){
+	for (i = 0; i < MY_DIM; i++){
 		res *= (fabs(point1.coord[i] - point2.coord[i]) < err);
 	}
 
@@ -33,13 +33,13 @@ int point_t_equal(point_t point1, point_t point2, double err){
 
 void point_t_coef_mul(double coef, point_t* point){
 	int i;
-	for (i = 0; i < DIM; i++)
+	for (i = 0; i < MY_DIM; i++)
 		(*point).coord[i] *= coef;
 }
 
 point_t point_t_coef_mul_new(double coef, point_t point){
 	point_t res;
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		res.coord[i] = point.coord[i] * coef;
 
 	return res;
@@ -48,7 +48,7 @@ point_t point_t_coef_mul_new(double coef, point_t point){
 point_t point_t_sum(point_t point1, point_t point2){
 	point_t sum;
 	int i;
-	for (i = 0; i < DIM; i++){
+	for (i = 0; i < MY_DIM; i++){
 		sum.coord[i] = (point1).coord[i] + (point2).coord[i];
 	}
 
@@ -57,27 +57,27 @@ point_t point_t_sum(point_t point1, point_t point2){
 
 point_t point_t_add_scale(point_t origin, double coef, point_t addition){
 	point_t res;
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		res.coord[i] = origin.coord[i] + coef * addition.coord[i];
 	return res;
 }
 
 point_t point_t_scale_add_scale(double coef1, point_t p1, double coef2, point_t p2){
     point_t res;
-    for (int i = 0; i < DIM; i++)
+    for (int i = 0; i < MY_DIM; i++)
         res.coord[i] = coef1 * p1.coord[i] + coef2 * p2.coord[i];
     return res;
 }
 
 void point_t_add_scale_self(point_t* origin, double coef, point_t addition){
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		origin[0].coord[i] = origin[0].coord[i] + coef * addition.coord[i];
 }
 
 point_t point_t_dif(point_t point1, point_t point2){
 	point_t dif;
 	int i;
-	for (i = 0; i < DIM; i++)
+	for (i = 0; i < MY_DIM; i++)
 		dif.coord[i] = point1.coord[i] - point2.coord[i];
 	return dif;
 }
@@ -85,7 +85,7 @@ point_t point_t_dif(point_t point1, point_t point2){
 double point_t_scal_mul(point_t point1, point_t point2){
 	double res = 0;
 	int i;
-	for (i = 0; i < DIM; i++)
+	for (i = 0; i < MY_DIM; i++)
 		res += point1.coord[i] * point2.coord[i];
 	return res;
 }
@@ -121,25 +121,25 @@ point_t get_zero_point(){
 }
 
 int point_t_less(point_t pnt1, point_t pnt2){
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		if (pnt1.coord[i] >= pnt2.coord[i]) return 0;
 	return 1;
 }
 
 int point_t_less_eq(point_t pnt1, point_t pnt2){
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		if (pnt1.coord[i] > pnt2.coord[i]) return 0;
 	return 1;
 }
 
 int point_t_greater(point_t pnt1, point_t pnt2){
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		if (pnt1.coord[i] <= pnt2.coord[i]) return 0;
 	return 1;
 }
 
 int point_t_greater_eq(point_t pnt1, point_t pnt2){
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		if (pnt1.coord[i] < pnt2.coord[i]) return 0;
 	return 1;
 }
@@ -152,13 +152,13 @@ point_t point_t_or_area(point_t point1, point_t point2, point_t point3){
 point_t point_t_cpy(point_t point0){
 	point_t point;
 	int i;
-	for (i = 0; i < DIM; i++)
+	for (i = 0; i < MY_DIM; i++)
 		point.coord[i] = point0.coord[i];
 	return point;
 }
 
 void point_t_cpy_points(point_t* src, point_t* tgt){
-	memcpy((*tgt).coord, (*src).coord, DIM * sizeof(double));
+	memcpy((*tgt).coord, (*src).coord, MY_DIM * sizeof(double));
 }
 
 double get_area(point_t point1, point_t point2, point_t point3){
@@ -173,7 +173,7 @@ void point_t_dump(point_t point){
 point_t signed_norm_inf(point_t point, int* sign, int* n_max_crd){ //(x, 1, z)
 	double max_comp = fabs(point.coord[0]);
 	int max_j = 0;
-	for (int i = 1; i < DIM; i++){
+	for (int i = 1; i < MY_DIM; i++){
 		double abs_comp = fabs(point.coord[i]);
 		if (max_comp < abs_comp) {
 			max_comp = abs_comp;
@@ -396,19 +396,19 @@ point_t point_t_bary_coord( point_t a,
 
 
 
-matrix3D_t matrix3D_t_get_from_points(point_t points[DIM]){
+matrix3D_t matrix3D_t_get_from_points(point_t points[MY_DIM]){
 	matrix3D_t matr;
-	for (int i = 0; i < DIM; i++)
-		for (int j = 0; j < DIM; j++)
+	for (int i = 0; i < MY_DIM; i++)
+		for (int j = 0; j < MY_DIM; j++)
 			matr.matrix[i][j] = points[j].coord[i];
 	return matr;
 }
 
 matrix3D_t matrix3D_t_mul(matrix3D_t m1, matrix3D_t m2){
 	matrix3D_t m3 = {0};
-	for (int i = 0; i < DIM; i++)
-		for (int j = 0; j < DIM; j++)
-			for (int k = 0; k < DIM; k++)
+	for (int i = 0; i < MY_DIM; i++)
+		for (int j = 0; j < MY_DIM; j++)
+			for (int k = 0; k < MY_DIM; k++)
 				m3.matrix[i][j] += m1.matrix[i][k] * m2.matrix[k][j];
 	return m3;
 }
@@ -433,8 +433,8 @@ matrix3D_t matrix3D_t_inverse(matrix3D_t m){
 }
 
 void matrix3D_t_dump(matrix3D_t m){
-	for (int i = 0; i < DIM; i++){
-		for (int j = 0; j < DIM; j++)
+	for (int i = 0; i < MY_DIM; i++){
+		for (int j = 0; j < MY_DIM; j++)
 			printf("%.3f ", m.matrix[i][j]);
 		printf("\n");
 	}
@@ -442,8 +442,8 @@ void matrix3D_t_dump(matrix3D_t m){
 
 point_t matrix3D_t_vec_mul(matrix3D_t mat, point_t vec){
 	point_t res = {0};
-	for (int i = 0; i < DIM; i++)
-		for(int j = 0; j < DIM; j++)
+	for (int i = 0; i < MY_DIM; i++)
+		for(int j = 0; j < MY_DIM; j++)
 			res.coord[i] += mat.matrix[i][j] * vec.coord[j];
 	return res;
 }
@@ -451,7 +451,7 @@ point_t matrix3D_t_vec_mul(matrix3D_t mat, point_t vec){
 
 f_point_t f_point_t_convert(point_t point){
 	f_point_t mypoint;
-	for (int i = 0; i < DIM; i++)
+	for (int i = 0; i < MY_DIM; i++)
 		mypoint.coord[i] = (float) point.coord[i];
 
 	return mypoint;
@@ -459,7 +459,7 @@ f_point_t f_point_t_convert(point_t point){
 
 point_t f_point_t_to_point(f_point_t p){
 	point_t res;
-	for (int i = 0; i < DIM; ++i)
+	for (int i = 0; i < MY_DIM; ++i)
 		res.coord[i] = p.coord[i];
 	return res;
 }

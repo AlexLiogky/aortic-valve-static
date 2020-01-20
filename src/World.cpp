@@ -364,6 +364,12 @@ void World::set_initial_solving_params()
     statistic_t_reset(&m_statistic);
 }
 
+void World::updateColissionInfo(){
+    for (auto& net: m_collision){
+        net->updateCollisionInfo();
+    }
+}
+
 double World::predictMotion(){
     double shift = 0;
     for (auto& net: m_collision){
@@ -375,9 +381,7 @@ double World::predictMotion(){
 		relaxation(m_union_nets, sqrt(m_allow_shift / shift));
 		ret++;
 	}
-    for (auto& net: m_collision){
-        net->updateCollisionInfo();
-    }
+    updateColissionInfo();
     return ret;
 }
 
@@ -479,13 +483,13 @@ void World::setSolverData(solver_t data)
     }
 }
 
-std::vector<node_t*> World::getCollision(double mrg){
+World::ColissionType World::getCollision(double mrg){
     std::vector<double> margins;
     _extend_vector_to_size(margins, m_collision.size(), mrg);
     return getCollision(margins);
 }
 
-std::vector<node_t*> World::getCollision(std::vector<double>& mrg)
+World::ColissionType World::getCollision(std::vector<double>& mrg)
 {
     _extend_vector_to_size(mrg, m_collision.size(), 0.1);
     std::vector<double> pre_mrgs;
@@ -499,15 +503,26 @@ std::vector<node_t*> World::getCollision(std::vector<double>& mrg)
     /*double shift = m_collision[0]->computeFreeNexts();
     relaxation(m_union_nets, sqrt(m_allow_shift / shift));
     m_collision[0]->updateCollisionInfo();*/
-    predictMotion();
+    updateColissionInfo();
     findCollisions();
     //solveCollisions();
 
 
-    std::vector<node_t*> res;
-    res.reserve(m_collision[0]->m_scontacts.size());
-    for (int i = 0, cnt = m_collision[0]->m_scontacts.size(); i < cnt; ++i)
-        res.push_back(m_collision[0]->m_scontacts[i].m_node);
+    World::ColissionType res;
+    int size = 0;
+    for (int i = 0; i < m_dynamic_nets.count; ++i)
+        size += m_collision[i]->m_scontacts.size();
+    res.reserve(size);
+    for (int i = 0; i < m_dynamic_nets.count; ++i)
+    for (int j = 0, cnt = m_collision[i]->m_scontacts.size(); j < cnt; ++j){
+        int k = -1;
+        for (int ii = 0; ii < m_dynamic_nets.count; ++ii)
+            if (m_collision[i]->m_scontacts[j].m_fobstr->m_net.vrtx.nodes == m_dynamic_nets.nets[ii].vrtx.nodes){
+                k = ii;
+                break;
+            }
+        res.push_back(std::make_tuple(i, k, m_collision[i]->m_scontacts[j].m_node));
+    }
 
     for (int i = 0; i < m_collision.size(); ++i)
         m_collision[i]->setMargin(pre_mrgs[i]);

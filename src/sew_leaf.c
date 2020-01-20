@@ -220,7 +220,7 @@ void sewline_t_update_seglines(sew_line_t sew){
 			for (int i = 0; i < segcnt; i++){
 				projs[i] = sew.convert_2d_to_3d(pnts[i], &sew);
 				if(!sew.place_point_to_aorta(projs[i], &sew, projs + i))
-					printf("Point is not projectable\n");
+					printf("Point_3 is not projectable\n");
 			}
 			free(pnts);
 			/*printf("projs:: \n");

@@ -8,6 +8,8 @@
 #include "BulletCollision/CollisionDispatch/btCollisionWorld.h"
 #include <vector>
 #include "BulletSoftBody/btSparseSDF.h"
+#include <utility>
+#include <tuple>
 
 btVector3 p2Bt (const point_t& p);
 point_t Bt2p (const btVector3& p);
@@ -60,6 +62,9 @@ public:
             aabbMax = m_bounds[1];
         }
         void updateBounds();
+    private:
+        std::vector<std::pair<node_t*, Net_Wraper*>> _m_data1;
+        std::vector<std::pair<elem_t*, Net_Wraper*>> _m_data2;
     };
 
     struct SContact
@@ -70,6 +75,8 @@ public:
 		point_t m_normal;       // Normal
 		double m_margin;        // Margin
 		double m_cfm[2];        // Constraint force mixing
+        Net_Wraper* m_nobstr;   // Node body
+        Net_Wraper* m_fobstr;   // Face body
 	};
 
     struct RContact
@@ -79,6 +86,7 @@ public:
 		point_t m_normal;       // Normal
 		point_t m_tnormal;      // Normal of triangle
 		double m_margin;        // Margin
+        Net_Wraper* m_obstr;    // Obstruction
 	};
 
 typedef btAlignedObjectArray<SContact> tSContactArray;

@@ -37,8 +37,10 @@ void net_t_set_relax_state(net_t net);
 //to all net in nets, direction of anisotropy "fiber_dir" suppose common
 void nets_t_set_relax_state(nets_t nets, point_t fiber_dir);
 
-//set shared elem for every elem in net
+//set shared elems for every elem in net
 void net_t_set_elems_neighbours(net_t net);
+//set shared elems only for elem in net, advanced low-level function, using doesn't advised
+void net_t_elem_t_set_elems_neighbours(net_t net, elem_t* elem);
 
 //set shared elem for every elem in net container
 void nets_t_set_elems_neighbours(nets_t nets);
