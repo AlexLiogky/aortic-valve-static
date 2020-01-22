@@ -15,6 +15,9 @@ typedef struct net_t{
 	elems_t elems;
 	springs_t springs;
 	int state;
+#ifdef INDIVIDUAL_ELASTIC_INFO
+	void* elastic_info;
+#endif
 }net_t;
 
 typedef struct nets_t{

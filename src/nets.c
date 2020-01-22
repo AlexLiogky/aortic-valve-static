@@ -10,7 +10,11 @@
 #include "nets.h"
 
 net_t net_t_get(vrtx_t vrtx, elems_t elems, springs_t springs){
-	net_t net = {vrtx, elems, springs, NETS_DYNAMIC};
+#ifdef INDIVIDUAL_ELASTIC_INFO
+	net_t net = {vrtx, elems, springs, NETS_DYNAMIC, NULL};
+#else
+    net_t net = {vrtx, elems, springs, NETS_DYNAMIC};
+#endif
 	return net;
 }
 
@@ -33,6 +37,9 @@ void net_t_destruct(net_t net){
 	vrtx_t_destruct(net.vrtx);
 	elems_t_destruct(net.elems);
 	springs_t_destruct(net.springs);
+#ifdef INDIVIDUAL_ELASTIC_INFO
+	if (net.elastic_info) free(net.elastic_info);
+#endif
 }
 
 void nets_t_destruct(nets_t nets){

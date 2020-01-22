@@ -250,7 +250,7 @@ void Net_Wraper::updateCollisionInfo()
 
 double Net_Wraper::computeFreeNexts(){
     if (net_is_static(this->m_net)) return 0;
-    set_elastic_model(m_eModel);
+    set_default_elastic_model(m_eModel);
     return compute_free_nexts(m_net, m_P, m_delta);
 }
 

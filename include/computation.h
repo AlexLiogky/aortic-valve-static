@@ -22,8 +22,18 @@ enum ElasticModels{
     EMOD_COUNT
 };
 
+#define MAX_COUNT_ELASTIC_PARAMS 10
+typedef struct elast_info_t{
+    int model;
+    double params[MAX_COUNT_ELASTIC_PARAMS];
+} elast_info_t;
+
 //############computation###############################################
-void set_elastic_model(int type);
+void set_default_elastic_model(int type);
+void set_default_elastic_params(double* prms, int count);
+#ifdef INDIVIDUAL_ELASTIC_INFO
+void set_elastic_info(net_t* net, int type, double* prms, int count);
+#endif
 
 //set specific collision force
 void set_contact_force_consts(double k1, double k2);

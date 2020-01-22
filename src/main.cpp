@@ -35,8 +35,30 @@
 #include "MinEnergyDeformator.h"
 using namespace std;
 
+struct MyLog{
+    void open( const std::string &filename,
+               ios_base::openmode mode = ios_base::out ){
+        if (activated)
+            log.open(filename, mode);
+    }
+    void close(){
+        if (activated)
+            log.close();
+    }
+    void set_activation(bool state) { activated = state; }
+    template <typename T>
+    MyLog& operator<< (const T& value){
+        if (activated)
+            log << value;
+        return *this;
+    }
+private:
+    std::ofstream log;
+    bool activated = true;
+};
+
 InputProcessor gPrms;
-std::ofstream gLog;
+MyLog gLog;
 
 //######################################################################
 long get_msec_time(struct timeval start, struct timeval end){
@@ -112,13 +134,13 @@ void min_energ_to_bnd(net_t& leaf, point_t att[2], point_t blood, point_t center
     MinEnergyDeformator m(leaf);
     SewEnergyParams& sep = gPrms.sep;
     set_plane_constr(m, sep.plane_w, n[0], DOT(center, n[0]));
-        gLog << "  plane: n = " << to_string(n[0]) << ", x0 = " << to_string(center) << std::endl;
+        gLog << "  plane: n = " << to_string(n[0]) << ", x0 = " << to_string(center) << "\n";
     set_plane_constr(m, sep.plane_w, n[1], DOT(center, n[1]));
-        gLog << "  plane: n = " << to_string(n[1]) << ", x0 = " << to_string(center) << std::endl;
+        gLog << "  plane: n = " << to_string(n[1]) << ", x0 = " << to_string(center) << "\n";
     set_default_length_constr(m, sep.sqr_length_w);
     set_default_digedral_angle_constr(m, /*sep.digedral_angle_w*/0.7, /*sep.convexity_w*/1.0);
     point_t wind = NORM(SCAL_SUM(-0.3, NORM(blood), 1.0, SCAL_SUM(0.5, n[0], 0.5, n[1])));
-        gLog << "  plane: wind = " << to_string(wind) << std::endl;
+        gLog << "  plane: wind = " << to_string(wind) << "\n";
     set_isotrop_force(m, gPrms.sep.force_w, wind);
     SewEnergyParams::EnergyMinimizerParams& emp = sep.sp;
     m.find_minimum_energy_df(emp.freq, emp.step_sz, emp.tol, emp.epsabs, emp.maxits, emp.time);
@@ -359,7 +381,7 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
     const double recognition = 1.05 * 4;
                                         set_contact_recognition_resolution(recognition * 0.1);
 	printf("Contact_Resolution = %lg\n", get_Contact_Resolution());
-        gLog << "Contact Resolution = " << get_Contact_Resolution()<< endl;
+        gLog << "Contact Resolution = " << get_Contact_Resolution()<< "\n";
 	nets_t curleaflet = leaflet;//get_valve_from_system(leaflet);
 	print_statistic(curleaflet);
 	double l_free[10];
@@ -375,7 +397,7 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 	printf("%s: h = %lg, h_c = %lg\n", gPrms.ro.res_dir.c_str(), h, h_c);
         gLog << "l_free[leaf] = { " <<  l_free[0] << ", " << l_free[1] << ", " << l_free[2] << " }\n";
         gLog << "0-th level:\n" << " h = " << h << "\n";
-        gLog << " h_c = " << h_c << ", count of central points = " << _pow << endl;
+        gLog << " h_c = " << h_c << ", count of central points = " << _pow << "\n";
 
 	for (int i = 0; i < 1; i++){
 		curleaflet = create_next_hierarchical_nets(curleaflet);
@@ -387,7 +409,7 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 		                                    set_contact_recognition_resolution(recognition * 0.1);
 		double h = nets_t_get_coapt_depth(curleaflet, &shift);
             gLog << " h = " << h << "\n";
-            gLog << " h_c = " << h_c << ", count of central points = " << _pow << endl;
+            gLog << " h_c = " << h_c << ", count of central points = " << _pow << "\n";
 		double f_area[3] = {};
 		double S_max = 0, S_min = 0;
 		printf("Compute full leaflet coaptation area:\n");
@@ -398,7 +420,7 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 			 S_max = (S_max < f_area[i]) ? f_area[i] : S_max;
 			 S_min = (S_min > f_area[i]) ? f_area[i] : S_min;
 			 printf("  full area[%d] = %lg\n", i, f_area[i]);
-                gLog << "  full area[" << i << "] = " << f_area[i] << endl;
+                gLog << "  full area[" << i << "] = " << f_area[i] << "\n";
 		 }
 		double p_area[6] = {};
 		printf("Compute partition leaflet coaptation area:\n");
@@ -409,7 +431,7 @@ void print_nets_statistic(nets_t leaflet, point_t shift){
 			printf("partion area[%d -> %d] = %lg\n", i%3, (i+1)%3, p_area[2 * i]);
 			printf("partion area[%d -> %d] = %lg\n", (i + 1)%3, (i)%3, p_area[2 * i + 1]);
                 gLog << "  partion area[" << i%3 << " -> " << (i+1)%3 << "] = " << p_area[2 * i] << "\n";
-                gLog << "  partion area[" << (i + 1)%3 << " -> " << (i)%3 << "] = " << p_area[2 * i + 1] << endl;
+                gLog << "  partion area[" << (i + 1)%3 << " -> " << (i)%3 << "] = " << p_area[2 * i + 1] << "\n";
 		}
         double h_mid[10];
         for (unsigned int i = 0; i < leaflet.count; ++i)
@@ -724,9 +746,11 @@ int main(int argc, char* argv[]){
 //    return 0;
 
     gPrms.InputProcessorInit(argc, argv);
-    return testMeassure(gPrms);
-    gLog.open(gPrms.ro.log_name, ios::trunc);
-    gLog << to_string(gPrms);
+    //return testMeassure(gPrms);
+    if (!gPrms.ro.use) gLog.set_activation(false);
+        gLog.open(gPrms.ro.log_name, ios::trunc);
+        gLog << to_string(gPrms);
+
 
     nets_t aorta = download_aorta(gPrms.a_in.aorta_file.c_str());
 	printf("elems.count = %u\n", aorta.nets[0].elems.count);
@@ -737,7 +761,8 @@ int main(int argc, char* argv[]){
 	        gPrms.l_ins[0].leaflet_file.c_str(), gPrms.l_ins[1].leaflet_file.c_str(), gPrms.l_ins[2].leaflet_file.c_str());
 	nets_t test = nets_t_get_net(leaflet.count-1);
     for (int i = 0; i < leaflet.count-1; ++i) test.nets[i] = leaflet.nets[i];
-    to_stl(test, (gPrms.ro.res_dir + "minim").c_str());
+    if (gPrms.ro.use)
+        to_stl(test, (gPrms.ro.res_dir + "minim").c_str());
 
         gLog << "Elems per net = " << test.nets[0].elems.count << "\n";
         gLog << "Nodes per net = " << test.nets[0].vrtx.count << "\n";
@@ -748,14 +773,14 @@ int main(int argc, char* argv[]){
 
     printf("len = %lg\n", net_t_get_len_free_edge(test.nets[0]));
         gLog << "Initial free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << "\n";
-        gLog << "Fixed len net = " << net_t_get_len_fix_edge(test.nets[0]) << endl;
+        gLog << "Fixed len net = " << net_t_get_len_fix_edge(test.nets[0]) << "\n";
 //TODO: сейчас модель хранится как параметр задачи, но нужно сделать так, чтобы модель была параметром объекта и притом имела память о своих параметрах
     solver_t solver_data = {gPrms.sp.delta, gPrms.sp.eps, gPrms.ots[0].elastic_model_type}; //1e-7//25e-7
         gLog << "eps = " << solver_data.eps << "\n";
         gLog << "ElasticType = " << solver_data.ElasticModelType << "\n";
         gLog << "delta = " << solver_data.delta << "\n";
     wrld_cnd_t conditions = {gPrms.ots[0].pressure};
-        gLog << "P = " << conditions.P << endl;
+        gLog << "P = " << conditions.P << "\n";
     double coef1 = gPrms.sp.max_possible_recommend_shift_scale, coef2 = gPrms.sp.max_possible_shift_scale;
 //TODO: DONE: сделать приём массива марджинов для всех тел в World
     World s(dynamic_nets, static_nets, conditions, solver_data, coef2*Allow_shift, coef1*Max_shift, gPrms.ots[0].collision_margin);
@@ -766,12 +791,13 @@ int main(int argc, char* argv[]){
     printf("Time of computation = %ld ms\n", get_msec_time(start1, end1));
     printf("Time of elastic computation = %lg ms\n", gt_elastic);
         gLog << "Final full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
-        gLog << "Final free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << endl;
-        gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
-        gLog << "Time of elastic computation = " << gt_elastic << endl;
+        gLog << "Final free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << "\n";
+        gLog << "Time of computation = " << get_msec_time(start1, end1) << "\n";
+        gLog << "Time of elastic computation = " << gt_elastic << "\n";
 
     gPrms.ro.test_data = gPrms.ro.res_dir + "result";   //TODO: to configfile
-    save_nets_to_file(s.getDynamicNets(), gPrms.ro.test_data.c_str());
+    if (gPrms.ro.use)
+        save_nets_to_file(s.getDynamicNets(), gPrms.ro.test_data.c_str());
 
 //    World::ColissionType coaptor = s.getCollision(0.11);
 //    for (auto& i: coaptor){
@@ -798,13 +824,16 @@ int main(int argc, char* argv[]){
         connect << i->id << " " << i->coord.coord[0] << " " << i->coord.coord[1] << " " << i->coord.coord[2] << "\n";
     }*/
 //TODO: сделать сохранялку которая определяет тип сохраняемого файла по названию
-    if (gPrms.ro.divide_leaflets)
-        for (int i = 0; i < std::min((int)gPrms.ro.leaf_names.size(), (int)dynamic_nets.count); ++i)
-            to_stl1(dynamic_nets.nets[i], gPrms.ro.leaf_names[i].c_str());
-    else
-        to_stl(dynamic_nets, gPrms.ro.leaf_names[0].c_str());
+    if (gPrms.ro.use) {
+        if (gPrms.ro.divide_leaflets)
+            for (int i = 0; i < std::min((int) gPrms.ro.leaf_names.size(), (int) dynamic_nets.count); ++i)
+                to_stl1(dynamic_nets.nets[i], gPrms.ro.leaf_names[i].c_str());
+        else
+            to_stl(dynamic_nets, gPrms.ro.leaf_names[0].c_str());
+    }
 
     print_nets_statistic(dynamic_nets, /*point_t_get_point(0, 0, 1)*/shift);
+
     return 0;
 
     nets_t dynamic_nets1 = create_next_hierarchical_nets(dynamic_nets);
@@ -819,8 +848,8 @@ int main(int argc, char* argv[]){
     printf("Time of elastic computation = %lg ms\n", gt_elastic);
 //    gLog << "Final full area per net = " << net_t_get_full_area(test.nets[0]) << "\n";
 //    gLog << "Final free edge len per net = " << net_t_get_len_free_edge(test.nets[0]) << endl;
-    gLog << "Time of computation = " << get_msec_time(start1, end1) << endl;
-    gLog << "Time of elastic computation = " << gt_elastic << endl;
+    gLog << "Time of computation = " << get_msec_time(start1, end1) << "\n";
+    gLog << "Time of elastic computation = " << gt_elastic << "\n";
 
 //    if (gPrms.ro.divide_leaflets)
 //        for (int i = 0; i < std::min((int)gPrms.ro.leaf_names.size(), (int)dynamic_nets.count); ++i)
@@ -839,13 +868,18 @@ int main(int argc, char* argv[]){
  * сделать проверку правильности последовательности (по state) в compute_nets(...)
  */
 
+/*  TODO:
+ * добавить поле-аккумулятор приложенной силы к узлу
+ * вынести вычисление силы упругости как силы вычисляемой по данным всей сети
+ * вынести полезные предвычисления индуцируемые той или иной силой упругости в отдельный массив по сетке
+ */
+
  /* можно отключить update_node у неподвижных вершин */
  /*центральная кооптация считается неверно, нужно понять, почему*/
 
  /*изменена контактная сила*/
 
 /*
- * создать считыватель всех параметров из config.conf
  * сделать полный рефакторинг кода
  * */
 

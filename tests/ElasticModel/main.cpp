@@ -96,7 +96,7 @@ int main(int argc, const char* argv[]) {
     double maxits = 100000;
     to_stl(_nets, "../bin/preresult");
     //exit(0);
-    set_elastic_model(EMOD_NEOGOOK);
+    set_default_elastic_model(EMOD_NEOGOOK);
     double R_exact =predicted_radius(P, params.R0, thickness);
     test_compute_nets(_nets, P, delta, maxits, err, 100, vrtmaterial);
     to_stl(_nets, "../bin/result");

@@ -3,6 +3,7 @@
 
 #include "nets.h"
 #include "save-data.h"
+#include "format_in.h"
 #include "precomputation.h"
 #include "World.h"
 #include "InputProcessor.h"
@@ -209,6 +210,7 @@ public:
     void clearCoaptationField();
     void savetoOFF(string directory);
     void savetoSTL(string directory, string name = "");
+    void savetoSTL_remap(net_t& net, int id, string directory, string name = "");
     void saveCurrentMeshToSTL(string directory, string name = "mesh");
     void print_distribution(string directory, string name = "distribution", int N = 100);
     void print_billowing(string directory, string name = "billowing");
@@ -228,20 +230,25 @@ public:
 
 inline int testMeassure(InputProcessor& gPrms){
     nets_t valve = download_nets_from_file((gPrms.ro.res_dir + "result.nts").c_str());
-    to_stl(valve, (gPrms.ro.res_dir + "downloaded").c_str());
+    //to_stl(valve, (gPrms.ro.res_dir + "downloaded").c_str());
 
-    CoaptHeight c(valve, gPrms, 0.11*2);
+    CoaptHeight c(valve, gPrms, 0.11*3);
     c.print_billowing(gPrms.ro.res_dir, "billowing");
-    c.print_distribution(gPrms.ro.res_dir, "distribution", 1000);
+    c.print_distribution(gPrms.ro.res_dir, "distribution", 100);
+//    nets_t leaflet[3];
+//    for (int i = 0; i < 3; ++i) {
+//        leaflet[i] = formated_in(gPrms.l_ins[i].leaflet_file.c_str());
+//        c.savetoSTL_remap(leaflet[i].nets[0], i, gPrms.ro.res_dir);
+//    }
     //c.find_refined_elems();
-    c.refine_boundary_elems();
+    /*c.refine_boundary_elems();
     c.refine_boundary_elems();
     c.refine_boundary_elems();
     c.savetoOFF(gPrms.ro.res_dir);
     c.savetoSTL(gPrms.ro.res_dir);
     c.saveCurrentMeshToSTL(gPrms.ro.res_dir);
     c.print_distribution(gPrms.ro.res_dir, "distribution1", 1000);
-    c.print_billowing(gPrms.ro.res_dir, "billowing1");
+    c.print_billowing(gPrms.ro.res_dir, "billowing1");*/
 
     return 0;
 }

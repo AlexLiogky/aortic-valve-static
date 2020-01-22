@@ -14,7 +14,7 @@
 
 double Contact_Force_Const1 = 0.0005;//0.001;//0.00008;
 double Contact_Force_Const2 = 0.02;//0.01;//0.02;
-int ElasticModelType = 0;
+elast_info_t DefaultElasticInfo = {0, {1000000, 1000000, 0.18, 0}};
 
 void set_contact_force_consts(double k1, double k2){
 	Contact_Force_Const1 = k1;
@@ -74,7 +74,7 @@ point_t f_spring(net_t net, node_t* node, spring_t* spring){
 }
 
 
-point_t elastic_force_MSM(net_t net, node_t* node){
+point_t elastic_force_MSM(net_t net, node_t* node, double* prms){
 	unsigned int sp_cnt = (*node).cnt_springs, i;
 	point_t f = get_zero_point();
 	for (i = 0; i < sp_cnt; i++){
@@ -84,9 +84,9 @@ point_t elastic_force_MSM(net_t net, node_t* node){
 	return f; //10^-4 * H
 }
 
-point_t elastic_force_REINFORCING(net_t net, node_t* node){
-    double mu = 1000000.0  / 3.0;
-    double Jm = 2.3;
+point_t elastic_force_REINFORCING(net_t net, node_t* node, double* prms){
+    double mu = prms[0] / 3.0;
+    double Jm = prms[1];
 
     point_t f = ZERO();
 
@@ -134,8 +134,8 @@ point_t elastic_force_REINFORCING(net_t net, node_t* node){
     return f;
 }
 
-point_t elastic_force_NEOGOOK(net_t net, node_t* node){
-    double mu = 1000000.0 / 3;
+point_t elastic_force_NEOGOOK(net_t net, node_t* node, double* prms){
+    double mu = prms[0] / 3;
     //double d = 1;
 
     point_t f = ZERO();
@@ -192,9 +192,9 @@ point_t elastic_force_NEOGOOK(net_t net, node_t* node){
 
 
 
-point_t elastic_force_TRQS(net_t net, node_t* node){     //St Venan
-    double E = 1000000;      //Young modulus, Pa
-	double nu = 0.45;           //Poisson ratio
+point_t elastic_force_TRQS(net_t net, node_t* node, double* prms){     //St Venan
+    double E = prms[0];      //Young modulus, Pa
+	double nu = prms[1];           //Poisson ratio
 
     point_t f = ZERO();
     for (unsigned int i = 0; i < node->cnt_elems; ++i)
@@ -364,10 +364,41 @@ point_t elastic_force1(net_t net, node_t* node){
     return f;   //10^-6 * H
 }*/
 
-void set_elastic_model(int type) { ElasticModelType = type; }
+void set_predefault_elastic_params(int modeltype){
+    static double predef_prms[][MAX_COUNT_ELASTIC_PARAMS] = {
+            {1000000, 1000000, 0.18, 0},
+            {1000000, 0.45, 0},
+            {1000000.0, 0},
+            {1000000.0, 2.3, 0}
+    };
+    for (int i = 0; i < MAX_COUNT_ELASTIC_PARAMS; ++i)
+    DefaultElasticInfo.params[i] = predef_prms[modeltype][i];
+}
+
+void set_default_elastic_params(double* prms, int count){
+    int cnt = count;
+    if (count > MAX_COUNT_ELASTIC_PARAMS) {
+        perror("To much elastic parameters, will be saved not all");
+        cnt = MAX_COUNT_ELASTIC_PARAMS;
+    }
+    for (int i = 0; i < cnt; ++i)
+        DefaultElasticInfo.params[i] = prms[i];
+}
+
+void set_default_elastic_model(int type) {
+    DefaultElasticInfo.model = type;
+    set_predefault_elastic_params(type);
+}
 
 point_t elastic_force(net_t net, node_t* node){
-    typedef point_t (*elast_t)(net_t net, node_t* node);
+    double* parameters = DefaultElasticInfo.params;
+#ifdef INDIVIDUAL_ELASTIC_INFO
+    if (net.elastic_info){
+        elast_info_t* info = (elast_info_t*) net.elastic_info;
+        parameters = info.params;
+    }
+#endif
+    typedef point_t (*elast_t)(net_t net, node_t* node, double* prms);
     static elast_t elast_model[] = {
         elastic_force_MSM,
         elastic_force_TRQS,
@@ -375,7 +406,7 @@ point_t elastic_force(net_t net, node_t* node){
         elastic_force_REINFORCING
     };
 
-    return elast_model[ElasticModelType](net, node);
+    return elast_model[DefaultElasticInfo.model](net, node, parameters);
 }
 
 void get_foces_to_bending_elem(spring_t* spr, point_t f[4], double teta_0){

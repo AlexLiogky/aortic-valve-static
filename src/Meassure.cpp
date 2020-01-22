@@ -105,6 +105,38 @@ void CoaptHeight::savetoOFF(string directory){
     }
 }
 
+void CoaptHeight::savetoSTL_remap(net_t& net, int id, string directory, string name){
+    set_colData();
+    computeFaces();
+
+    set<int> saved_elems;
+    for (int j = 0; j < mesh.nets[id].elems.count; ++j){
+        elem_t& e = *mesh.nets[id].elems.elems[j];
+        for (int k = 0; k < 2; ++k){
+            set<node_t*>& nodes = colData[remap[id][k]];
+            if (auto n0 = nodes.find(e.vrts[0]); n0 == end(colData[remap[id][k]])) continue;
+            if (auto n1 = nodes.find(e.vrts[1]); n1 == end(colData[remap[id][k]])) continue;
+            if (auto n2 = nodes.find(e.vrts[2]); n2 == end(colData[remap[id][k]])) continue;
+            saved_elems.insert(e.id);
+            }
+    }
+    string fname = directory + "coapt-" + to_string(id) + "-remap" + name + ".stl";
+    std::ofstream stl(fname);
+    auto e_to_pnts = [&net](auto& e){
+        auto& n = net.elems.elems[e]->vrts;
+        return array{n[0]->coord, n[1]->coord, n[2]->coord};
+    };
+    _savetoSTL(stl, saved_elems, e_to_pnts, name);
+    stl.close();
+    fname = directory + "nocoapt-" + to_string(id) + "-remap" + name + ".stl";
+    stl.open(fname);
+    auto ee_to_pnts = [&net](auto& e){
+        auto& n = net.elems.elems[e->id]->vrts;
+        return array{n[0]->coord, n[1]->coord, n[2]->coord};
+    };
+    _savetoSTL(stl, m_no_coapt_elems[id], ee_to_pnts, name);
+}
+
 void CoaptHeight::savetoSTL(string directory, string name){
     set_colData();
     computeFaces();
