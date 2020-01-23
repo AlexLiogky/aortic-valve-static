@@ -10,14 +10,19 @@
 extern "C" {
 #endif
 
+typedef struct _net_t_data{
+#ifdef INDIVIDUAL_ELASTIC_INFO
+    void* elastic_info;
+#endif
+    void* data;
+} _net_t_data;
+
 typedef struct net_t{
 	vrtx_t vrtx;
 	elems_t elems;
 	springs_t springs;
 	int state;
-#ifdef INDIVIDUAL_ELASTIC_INFO
-	void* elastic_info;
-#endif
+    _net_t_data* nd;
 }net_t;
 
 typedef struct nets_t{
@@ -29,6 +34,13 @@ enum NetsMoveState{
 	NETS_DYNAMIC,
 	NETS_STATIC
 };
+
+#define MAX_COUNT_ELASTIC_PARAMS 10
+typedef struct elast_info_t{
+    int model;
+    double params[MAX_COUNT_ELASTIC_PARAMS];
+    void* precomp;
+} elast_info_t;
 
 //######################################################################
 //######################################################################

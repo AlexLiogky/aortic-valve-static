@@ -9,12 +9,24 @@
 #include "spring.h"
 #include "nets.h"
 
-net_t net_t_get(vrtx_t vrtx, elems_t elems, springs_t springs){
+_net_t_data* _net_t_data_construct(){
+    return (_net_t_data*)calloc(1, sizeof(_net_t_data));
+}
+
+void _net_t_data_destruct(_net_t_data* nd){
+    if (nd && nd->data) free(nd->data);
 #ifdef INDIVIDUAL_ELASTIC_INFO
-	net_t net = {vrtx, elems, springs, NETS_DYNAMIC, NULL};
-#else
-    net_t net = {vrtx, elems, springs, NETS_DYNAMIC};
+    if (nd && nd->elastic_info) {
+        elast_info_t_destruct(nd->elastic_info);
+        free(nd->elastic_info);
+    }
 #endif
+    free(nd);
+}
+
+net_t net_t_get(vrtx_t vrtx, elems_t elems, springs_t springs){
+    net_t net = {vrtx, elems, springs, NETS_DYNAMIC, _net_t_data_construct()};
+
 	return net;
 }
 
@@ -33,13 +45,18 @@ nets_t nets_t_get_net(int count){
 	return nets;
 }
 
+#ifdef INDIVIDUAL_ELASTIC_INFO
+void elast_info_t_destruct(elast_info_t* data){
+    if (data && data->precomp)
+        free(data->precomp);
+}
+#endif
+
 void net_t_destruct(net_t net){
 	vrtx_t_destruct(net.vrtx);
 	elems_t_destruct(net.elems);
 	springs_t_destruct(net.springs);
-#ifdef INDIVIDUAL_ELASTIC_INFO
-	if (net.elastic_info) free(net.elastic_info);
-#endif
+    _net_t_data_destruct(net.nd);
 }
 
 void nets_t_destruct(nets_t nets){

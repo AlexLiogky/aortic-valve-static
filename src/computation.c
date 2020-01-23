@@ -7,6 +7,7 @@
 #include "format_in.h"
 #include "precomputation.h"
 #include "computation.h"
+#include "elastic_forces.h"
 
 #ifndef M_PI
     #define M_PI 3.141592653589793238462643383279502884
@@ -14,7 +15,7 @@
 
 double Contact_Force_Const1 = 0.0005;//0.001;//0.00008;
 double Contact_Force_Const2 = 0.02;//0.01;//0.02;
-elast_info_t DefaultElasticInfo = {0, {1000000, 1000000, 0.18, 0}};
+def_elast_info_t DefaultElasticInfo = {0, {1000000, 1000000, 0.18, 0}, 0};
 
 void set_contact_force_consts(double k1, double k2){
 	Contact_Force_Const1 = k1;
@@ -364,6 +365,31 @@ point_t elastic_force1(net_t net, node_t* node){
     return f;   //10^-6 * H
 }*/
 
+int update_precomp_data(net_t net, int model, double* prms, void** data){
+    typedef int (*elast_t)(net_t net, double* prms, void** data);
+    static elast_t elast_model[] = {
+            precomp_elastic_force_MSM,
+            precomp_elastic_force_TRQS,
+            precomp_elastic_force_NEOGOOK,
+            precomp_elastic_force_REINFORCING
+    };
+
+    return elast_model[model](net, prms, data);
+}
+
+void* get_precomp_data(net_t net){
+    if (!net.nd->data){
+        int size = 2 * sizeof(long long) + net.vrtx.count * sizeof(double);
+        net.nd->data = malloc(size);
+        long long* idata = (long long*) net.nd->data;
+        idata[0] = size;
+        idata[1] = -1;
+    }
+    if (((long long*)net.nd->data)[1] != DefaultElasticInfo.version)
+        update_precomp_data(net, DefaultElasticInfo.model, DefaultElasticInfo.params, &net.nd->data);
+    return net.nd->data;
+}
+
 void set_predefault_elastic_params(int modeltype){
     static double predef_prms[][MAX_COUNT_ELASTIC_PARAMS] = {
             {1000000, 1000000, 0.18, 0},
@@ -383,11 +409,35 @@ void set_default_elastic_params(double* prms, int count){
     }
     for (int i = 0; i < cnt; ++i)
         DefaultElasticInfo.params[i] = prms[i];
+    DefaultElasticInfo.version++;
 }
+#ifdef INDIVIDUAL_ELASTIC_INFO
+void set_elastic_info(net_t* net, int type, double* prms, int count){
+    if (!net.nd->elastic_info){
+        net.nd->elastic_info = calloc(sizeof(elast_info_t));
+        int size = 2 * sizeof(long long) + net.vrtx.count * sizeof(double);
+        net.nd->elastic_info->precomp = malloc(size);
+        long long* idata = (long long*) net.nd->elastic_info->precomp;
+        idata[0] = size;
+        idata[1] = 0;
+    }
+    net.nd->elastic_info->model = type;
+     if (count > MAX_COUNT_ELASTIC_PARAMS) {
+        perror("To much elastic parameters, will be saved not all");
+        count = MAX_COUNT_ELASTIC_PARAMS;
+    }
+    for (int i = 0; i < cnt; ++i)
+        net.nd->elastic_info->params[i] = prms[i];
+    update_precomp_data(net, type, net.nd->elastic_info->params, &net.nd->elastic_info->precomp);
+}
+#endif
 
 void set_default_elastic_model(int type) {
+    if (DefaultElasticInfo.model == type && DefaultElasticInfo.version == 0)
+        return;
     DefaultElasticInfo.model = type;
     set_predefault_elastic_params(type);
+    DefaultElasticInfo.version++;
 }
 
 point_t elastic_force(net_t net, node_t* node){
@@ -637,38 +687,95 @@ void relaxation(nets_t nets, double coef){
 
 double gt_elastic = 0;
 
-double compute_free_nexts(net_t net, double P, double delta){
-	int cnt_vrt = net.vrtx.count, i = 0;
-	double max_shift = 0;
-	//init_bending_forces(net);                     //bending
-	for (i = 0; i < cnt_vrt; i++){
-		node_t* node = net.vrtx.nodes[i];
-		if (is_fix((*node).state)) continue;
-		point_t F_p = pressure_force(net, node, P);
-
-		struct timeval start, end;
-        gettimeofday(&start, NULL);
-		point_t F_sp = elastic_force(net, node);
-		gettimeofday(&end, NULL);
-        gt_elastic += (end.tv_sec  - start.tv_sec) * 1.e+3 + (end.tv_usec - start.tv_usec) * 1.e-3;
-
-		//point_t F_bn = bending_force(net, node, i);       //bending
-		//printf("p = "); point_t_dump(F_p);
-		//printf("bn = "); point_t_dump(F_bn);
-		//printf("sp = "); point_t_dump(F_sp);
-		//ADD_S(&F_sp, 1.0, F_bn);
-
-		point_t next = SCAL(delta, SUM(F_p, F_sp));
-
-		double next_sqr_len = SQR_LEN(next);
-		if (max_shift < next_sqr_len) max_shift = next_sqr_len;
-
-		next = SUM(next, (*node).coord);
-		point_t_cpy_points(&next, &(*node).next);
-		(*(net.vrtx.nodes[i])).coaptative = -1;
-	}
-	return max_shift;
+void set_initial_nexts(net_t net){
+    for (int i = 0, cnt = net.vrtx.count; i < cnt; ++i)
+        net.vrtx.nodes[i]->next = net.vrtx.nodes[i]->coord;
 }
+
+int set_elastic_force(net_t net, double delta){
+    double* parameters = NULL;
+#ifdef INDIVIDUAL_ELASTIC_INFO
+    if (net.elastic_info){
+        elast_info_t* info = (elast_info_t*) net.nd->elastic_info;
+        parameters = (double*)info.precomp;
+    }
+    else
+        parameters = (double*) get_precomp_data(net);
+#else
+     parameters = (double*) get_precomp_data(net);
+#endif
+
+    typedef int (*elast_t)(net_t net, double delta, void* prms);
+    static elast_t elast_model[] = {
+            set_elastic_force_MSM,
+            set_elastic_force_TRQS,
+            set_elastic_force_NEOGOOK,
+            set_elastic_force_REINFORCING
+    };
+
+    return elast_model[DefaultElasticInfo.model](net, delta, parameters);
+}
+
+int set_pressure_force(net_t net, double delta, double P){
+    for (int i = 0, cnt = net.vrtx.count; i < cnt; ++i)
+        ADD_S(&net.vrtx.nodes[i]->next, delta, pressure_force(net, net.vrtx.nodes[i], P));
+    return 0;
+}
+
+double get_max_predicted_sqr_shift(net_t net){
+    double max_shift = 0;
+    for (int i = 0, cnt = net.vrtx.count; i < cnt; ++i){
+        node_t* n = net.vrtx.nodes[i];
+        if (is_fix(n->state)) {
+            n->next = n->coord;
+            continue;
+        }
+        double next_sqr_len = SQR_LEN(DIF(n->next, n->coord));
+        if (max_shift < next_sqr_len) max_shift = next_sqr_len;
+        n->coaptative = -1; //TODO: is this variable neccessary?
+    }
+    return max_shift;
+}
+
+double compute_free_nexts(net_t net, double P, double delta){
+    set_initial_nexts(net);
+    set_elastic_force(net, delta);
+    set_pressure_force(net, delta, P);
+    return get_max_predicted_sqr_shift(net);
+}
+
+//double compute_free_nexts(net_t net, double P, double delta){
+//	int cnt_vrt = net.vrtx.count, i = 0;
+//	double max_shift = 0;
+//	//init_bending_forces(net);                     //bending
+//	for (i = 0; i < cnt_vrt; i++){
+//		node_t* node = net.vrtx.nodes[i];
+//		if (is_fix((*node).state)) continue;
+//		point_t F_p = pressure_force(net, node, P);
+//
+//		struct timeval start, end;
+//        gettimeofday(&start, NULL);
+//		point_t F_sp = elastic_force(net, node);
+//		gettimeofday(&end, NULL);
+//        gt_elastic += (end.tv_sec  - start.tv_sec) * 1.e+3 + (end.tv_usec - start.tv_usec) * 1.e-3;
+//
+//		//point_t F_bn = bending_force(net, node, i);       //bending
+//		//printf("p = "); point_t_dump(F_p);
+//		//printf("bn = "); point_t_dump(F_bn);
+//		//printf("sp = "); point_t_dump(F_sp);
+//		//ADD_S(&F_sp, 1.0, F_bn);
+//
+//		point_t next = SCAL(delta, SUM(F_p, F_sp));
+//
+//		double next_sqr_len = SQR_LEN(next);
+//		if (max_shift < next_sqr_len) max_shift = next_sqr_len;
+//
+//		next = SUM(next, (*node).coord);
+//		point_t_cpy_points(&next, &(*node).next);
+//		(*(net.vrtx.nodes[i])).coaptative = -1;
+//	}
+//	return max_shift;
+//}
 
 double get_diviation(nets_t nets){
 	double diviation = 0;

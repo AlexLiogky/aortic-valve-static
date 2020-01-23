@@ -22,11 +22,11 @@ enum ElasticModels{
     EMOD_COUNT
 };
 
-#define MAX_COUNT_ELASTIC_PARAMS 10
-typedef struct elast_info_t{
+typedef struct def_elast_info_t{
     int model;
     double params[MAX_COUNT_ELASTIC_PARAMS];
-} elast_info_t;
+    int version;
+} def_elast_info_t;
 
 //############computation###############################################
 void set_default_elastic_model(int type);
