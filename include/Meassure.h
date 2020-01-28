@@ -11,10 +11,15 @@
 #include <sstream>
 #include <fstream>
 #include <iostream>
+#include <sstream>
 #include <map>
 #include <set>
 #include <algorithm>
+#include <iterator>
 #include <cmath>
+
+#include <gsl/gsl_multimin.h>
+#include <chrono>
 
 #include <CGAL/Simple_cartesian.h>
 #include <CGAL/linear_least_squares_fitting_3.h>
@@ -113,7 +118,7 @@ private:
 private:
     void set_colData();
     template<typename ElemIterator, typename ElemToPoints>
-    void _savetoSTL(std::ofstream& stl, ElemIterator eit, ElemToPoints e_to_pnts, string name = ""){
+    void _savetoSTL(std::ofstream& stl, ElemIterator& eit, const ElemToPoints& e_to_pnts, string name = ""){
         stl << "solid " << name << std::endl;
         for (auto& j: eit){
             auto pnts = e_to_pnts(j);
@@ -128,6 +133,20 @@ private:
             stl << "endfacet" << endl;
         }
         stl << "endsolid " << name << std::endl;
+    }
+    template<typename NodeContainer, typename NodeToPoints>
+    void _savetoOFF(std::ofstream& off, const NodeContainer& nct, const NodeToPoints& n_to_dbl_vec){
+        off << "OFF\n\n";
+        off << nct.size() << " " << "0" << " 0\n";
+        for (auto& j: nct)
+        {
+            auto pnt = n_to_dbl_vec(j);
+            for (auto k: pnt)
+                off << k << " ";
+            for (int k = pnt.size(); k < 3; ++k)
+                off << 0 << " ";
+            off << "\n";
+        }
     }
     template <int DD, typename T1, typename T2, typename Convert>
     auto get_linear_least_squares_fitting_plane(T1& data1, T2& data2, Convert conv){
@@ -148,6 +167,28 @@ private:
         linear_least_squares_fitting_3(objs.begin(), objs.end(), plane, CGAL::Dimension_tag<DD>());
         return plane;
     }
+    template<typename NodeConverter, typename CheckEdgeExist>
+    vector<array<int, 3>> convert_edges_to_elems(NodeConverter node_conv, CheckEdgeExist is_here, int mesh_n){
+        vector<array<int, 3>> res;
+        for (int i = 0, cnt = mesh.nets[mesh_n].elems.count; i < cnt; ++i){
+            auto e = mesh.nets[mesh_n].elems.elems[i];
+            array<int, 3> loop;
+            bool flag = true;
+            for (int j = 0; j < 3; ++j) {
+                loop[j] = node_conv(e->vrts[j]);
+                flag *= (loop[j] >= 0);
+            }
+            if (!flag) continue;
+            array<int, 3> loop_cp = loop;
+            sort(loop.begin(), loop.end());
+            const array<pair<int, int>, 3> finder = {pair(0, 1), {0, 2}, {1, 2}};
+            for (int j = 0; j < 3; ++j)
+                flag *= (is_here({loop[finder[j].first], loop[finder[j].second]}));
+            if (!flag) continue;
+            res.push_back(loop_cp);
+        }
+        return res;
+    }
     void computeFaces();
     Point_3 point_t_to_Point(const point_t& p0) const ;
     map<pair<int, int>, Plane> find_mid_planes(const int dim = 2);
@@ -160,12 +201,51 @@ private:
     void set_triangle_edges();
     void set_all_edges();
     void compute_boundary_edges();
+    static array<double, 2> _clever_field_directed_diam(const vector<Point_2>& pnts, const set<pair<int, int>>& edges, const Line_2& line, const Vector_2& dir);
+    static double _field_directed_diam(const vector<Point_2>& pnts, const set<pair<int, int>>& edges, const Line_2& line, const Vector_2& dir);
     double field_directed_diam(const pair<int, int>& id, const Line_2& line, const Vector_2& dir);
     void compute_billow_plate();
     void find_refined_elems();
     vector<elem_t*> refine_elem(int mesh_n, elem_t* e);
     set<int> test_node_in_springs(node_t* n, net_t net);
     void compute_billowing_pnts();
+    set<node_t*> common_nodes(int mesh_n);
+    set<spring_t*> common_edges(int mesh_n);
+    set<node_t*> common_nodes_with_connection(int mesh_n);
+    static vector<Point_2> align_to_dir(const vector<Point_2>& pnts, const Vector_2& dir);
+    static vector<Point_2> dealign_from_dir(const vector<Point_2>& aligned, const Vector_2& dir);
+
+    struct SewTwoFields{
+        SewTwoFields(vector<Point_2>& p1, set<pair<int, int>>& link1,
+                     vector<Point_2>& p2, set<pair<int, int>>& link2, map<int, int>& common_pnts_id):
+                     m_p1{p1}, m_p2{p2}, m_l1{link1}, m_l2{link2}, m_cn{common_pnts_id}
+        {}
+    private:
+        void set_data(gsl_vector *x);
+        void set_new_points(gsl_vector* x);
+        double compute(const gsl_vector *x);
+        void compute_df(const gsl_vector *x, gsl_vector *df);
+        double compute_fdf(const gsl_vector *x, gsl_vector *df);
+        static void _fdf4gsl(const gsl_vector *x, void *params, double *f, gsl_vector *df);
+        static double _f4gsl (const gsl_vector *x, void *params);
+        static void _df4gsl (const gsl_vector *x, void *params, gsl_vector *df);
+    public:
+        int find_minimum_energy_df(int freq = 1, double step_sz = 1.e-4, double tol = 1.e-4, double epsabs = 1.e-2, int maxits = 50000, double time = 150);
+
+    private:
+        vector<Point_2> &m_p1, &m_p2;
+        set<pair<int, int>> &m_l1, &m_l2;
+        map<int, int>& m_cn;
+        const double m_wy = 10;
+        map<int, int> m_map1, m_map2;
+    };
+
+    static tuple<vector<Point_2>, set<pair<int, int>>, map<int, int>>
+            _get_connected_pnts(const vector<Point_2>& pnts, const set<pair<int, int>>& connect);
+    void compute_plane_leaf_coaptation_profile(int mesh_n);
+    void compute_leaf_profiles();
+public:
+
 
 private:
     nets_t mesh;
@@ -178,21 +258,26 @@ private:
 
     map<pair<int, int>, set<node_t*>> colData;
     map<pair<int, int>, vector<node_t*>> m_nodes;
-    map<pair<int, int>, vector<Point_2>> projection;
+    map<pair<int, int>, vector<Point_2>> m_projection;
     map<pair<int, int>, set<pair<int, int>>> m_edges;
     map<pair<int, int>, set<pair<int, int>>> m_boundary_edges;
     map<pair<int, int>, K::Vector_2> proj_dir;
     map<pair<int, int>, vector<array<int, 3>>> m_faces;
-    map<pair<int, int>, pair<Point_2, Point_2>> borders;
+    map<pair<int, int>, pair<Point_2, Point_2>> m_borders;
     vector<vector<elem_t*>> m_no_coapt_elems;
     vector<map<elem_t*, bool>> m_refined_elems;
     RefineElem m_refiner;
     vector<map<int, pair<int, int>>> remap = {{{0, {0, 1}}, {1, {0, 2}}},
                                               {{0, {1, 0}}, {1, {1, 2}}},
                                               {{0, {2, 0}}, {1, {2, 1}}}};
+    map<pair<int, int>, int> mapre = {{{0, 1}, 0}, {{0, 2}, 1},
+                                      {{1, 0}, 0}, {{1, 2}, 1},
+                                      {{2, 0}, 0}, {{2, 1}, 1}};
     map<pair<int, int>, Plane> m_planes;
     To_colData _to_colData;
     point_t axis;
+
+    map<int, tuple<vector<Point_2>, set<pair<int, int>>, map<int, int>, set<pair<int, int>>>> m_leaflet_coapt_fields;
 
     bool m_colData_b = false;
     bool m_faces_b = false;
@@ -202,6 +287,7 @@ private:
     bool m_edges_b = false;
     bool m_boundary_edges_b = false;
     bool m_borders_b = false;
+    bool m_leaf_profiles_b = false;
 
 public:
     CoaptHeight(nets_t valve, InputProcessor gPrms, double margin);
@@ -216,6 +302,8 @@ public:
     void print_billowing(string directory, string name = "billowing");
     double get_coapt_field_width(const pair<int, int>& id);
     vector<double> get_distribution(int N, const pair<int, int>& id);
+    pair<vector<array<double, 2>>, double> get_distribution_per_leaf(int N, int mesh_n);
+    void print_distribution_per_leaf(string directory, string name = "distribution_per_leaf", int N = 200);
     auto& get_billow_plate();
     double get_billowing_at(int nleaf);
     array<double, 3> get_billowing();
@@ -233,8 +321,14 @@ inline int testMeassure(InputProcessor& gPrms){
     //to_stl(valve, (gPrms.ro.res_dir + "downloaded").c_str());
 
     CoaptHeight c(valve, gPrms, 0.11*3);
+    //c.compute_plane_leaf_coaptation_profile(0);
     c.print_billowing(gPrms.ro.res_dir, "billowing");
-    c.print_distribution(gPrms.ro.res_dir, "distribution", 100);
+    c.print_distribution(gPrms.ro.res_dir, "distribution-new", 100);
+    c.refine_boundary_elems();
+    c.refine_boundary_elems();
+    c.refine_boundary_elems();
+    c.print_distribution_per_leaf(gPrms.ro.res_dir, "distribution_per_leaf", 1000);
+    c.savetoSTL(gPrms.ro.res_dir);
 //    nets_t leaflet[3];
 //    for (int i = 0; i < 3; ++i) {
 //        leaflet[i] = formated_in(gPrms.l_ins[i].leaflet_file.c_str());

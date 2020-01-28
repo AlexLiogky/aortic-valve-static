@@ -14,16 +14,16 @@ void CoaptHeight::set_colData(){
         _colData.insert(make_pair(make_pair(get<0>(i), get<1>(i)), v));
         _colData[make_pair(get<0>(i), get<1>(i))].insert(CoaptHeight::mesh.nets[get<0>(i)].vrtx.nodes[get<2>(i)->id]);
     }
-    map<pair<int, int>, int> mapre = {{{0, 1}, 0}, {{0, 2}, 1},
-                                      {{1, 0}, 0}, {{1, 2}, 1},
-                                      {{2, 0}, 0}, {{2, 1}, 1}};
     for (auto& i: _colData) {
         m_nodes.insert({i.first, vector<node_t*>()});
         auto& v = m_nodes[i.first];
         v.reserve(i.second.size());
         int counter = 0;
         for (auto &j: i.second) {
-            if (!j->contact_elem_id) j->contact_elem_id = (int*)calloc(2, sizeof(int));
+            if (!j->contact_elem_id){
+                j->contact_elem_id = (int*)calloc(2, sizeof(int));
+                j->contact_elem_id[0] = j->contact_elem_id[1] = -1;
+            }
             j->contact_elem_id[mapre[i.first]] = counter++;
             v.push_back(j);
         }
@@ -39,6 +39,7 @@ void CoaptHeight::computeCoaptationField(){
     state = project_coaption_to_planes(state);
     project_main_direction(state);;
     set_all_edges();
+    //set_triangle_edges();
     compute_boundary_edges();
     set_borders();
 }
@@ -46,18 +47,19 @@ void CoaptHeight::computeCoaptationField(){
 void CoaptHeight::clearCoaptationField(){
     colData.clear();
     m_nodes.clear();
-    projection.clear();
+    m_projection.clear();
     m_edges.clear();
     m_boundary_edges.clear();
     proj_dir.clear();
     m_faces.clear();
-    borders.clear();
+    m_borders.clear();
     m_no_coapt_elems.clear();
     m_refined_elems.clear();
     m_planes.clear();
     m_colData_b = m_faces_b = m_mid_planes_b = false;
     m_project_coaption_b = m_project_main_direction_b = false;
     m_edges_b = m_boundary_edges_b = m_borders_b = false;
+    m_leaf_profiles_b = false;
 }
 
 CoaptHeight::CoaptHeight(nets_t valve, InputProcessor gPrms, double margin):
@@ -173,10 +175,38 @@ void CoaptHeight::savetoSTL(string directory, string name){
             return VEC(vv[0], vv[1], vv[2]);
         };
         auto e_to_pnts = [&](auto& e){
-            auto& n = projection[i.first];
+            auto& n = m_projection[i.first];
             return array{P2p(n[e[0]]), P2p(n[e[1]]), P2p(n[e[2]])};
         };
         _savetoSTL(stl, i.second, e_to_pnts);
+    }
+
+    compute_leaf_profiles();
+    auto nconv1 = [](node_t* n) {return n->id;};
+    auto invmap = [](map<int, int> m){
+        map<int, int> res;
+        for (const auto& i: m)
+            res.insert({i.second, i.first});
+        return res;
+    };
+    for (auto it = m_leaflet_coapt_fields.begin(); it != m_leaflet_coapt_fields.end(); ++it) {
+        string fname = directory + "coapt_profile_" + to_string(it->first + 1) + ".stl";
+        std::ofstream stl(fname);
+        auto& [pnts, links, gmap, borders] = it->second;
+        auto check_link = [&links = links, inmp = invmap(gmap)](pair<int, int> q) mutable {
+            int tmp[2] = {inmp[q.first], inmp[q.second]};
+            if (tmp[0] > tmp[1]) swap(tmp[0], tmp[1]);
+            return (links.count({tmp[0], tmp[1]}) > 0);
+        };
+        auto inmp = invmap(gmap);
+        auto e_to_pnts3 = [&pnts = pnts, &inmp = inmp](auto &e) {
+            array<point_t, 3> arr;
+            for (int i = 0; i < 3; ++i)
+                arr[i] = VEC(pnts[inmp[e[i]]][0], pnts[inmp[e[i]]][1], 0);
+            return arr;
+        };
+        auto triags = convert_edges_to_elems(nconv1, check_link, it->first);
+        _savetoSTL(stl, triags, e_to_pnts3);
     }
 }
 
@@ -274,6 +304,30 @@ int CoaptHeight::set_mid_planes(const int dim){
     m_mid_planes_b = true;
     loc_dim = dim;
     m_planes = find_mid_planes(dim);
+    if (mesh.count == 3){
+        double dd[3][2] = {{1, 2}, {0, 2}, {0, 1}};
+        int changed[3] = {0, 0, 0};
+        for (int i = 0; i < 3; ++i){
+            Plane   &p1 = m_planes[remap[i][0]],
+                    &p2 = m_planes[remap[i][1]];
+            if (CGAL::scalar_product(p1.orthogonal_vector(), p2.orthogonal_vector()) < 0){
+                int to = remap[i][0].first + remap[i][0].second - 1;
+                if (changed[to]){
+                    Plane &pp = p2;
+                    Vector_3 v = pp.orthogonal_vector();
+                    pp = Plane(-pp.a(), -pp.b(), -pp.c(), -pp.d());
+                    to = remap[i][1].first + remap[i][1].second - 1;
+                    changed[to]++;
+                }
+                else{
+                    Plane &pp = p1;
+                    Vector_3 v = pp.orthogonal_vector();
+                    pp = Plane(-pp.a(), -pp.b(), -pp.c(), -pp.d());
+                    changed[to]++;
+                }
+            }
+        }
+    }
     return 0;
 }
 
@@ -317,8 +371,8 @@ int CoaptHeight::project_coaption_to_planes(int state){
     if (state && m_project_coaption_b) return 1;
     m_project_coaption_b = true;
     for (auto& i: m_nodes){
-        projection.insert({i.first, vector<Point_2>()});
-        auto& pnts = projection[i.first];
+        m_projection.insert({i.first, vector<Point_2>()});
+        auto& pnts = m_projection[i.first];
         pnts.reserve(i.second.size());
         auto& plane = m_planes[i.first];
         auto p = plane.point();
@@ -360,20 +414,20 @@ pair<CoaptHeight::Point_2, CoaptHeight::Point_2> CoaptHeight::get_minmax_Point_s
 void CoaptHeight::set_borders(){
     if (m_borders_b) return;
     m_borders_b = true;
-    for (auto& i: projection){
+    for (auto& i: m_projection){
         Vector_2 dir(proj_dir[i.first][1], -proj_dir[i.first][0]);
-        borders.insert({i.first, get_minmax_Point_set(i.second, dir)});
+        m_borders.insert({i.first, get_minmax_Point_set(i.second, dir)});
     }
 
-    auto pvt = [](Point_2 p) { return Vector_2(p[0], p[1]); };
+    /*auto pvt = [](Point_2 p) { return Vector_2(p[0], p[1]); };
     for (int i = 0; i < m_nodes.size(); ++i)
         for (int j = i + 1; j < m_nodes.size(); ++j){
             Vector_2 dir(proj_dir[{i, j}][1], -proj_dir[{i, j}][0]);
-            auto p0 = borders[{i, j}].first, p1 = borders[{i, j}].second;
-            if (dir * pvt(p0) > dir * pvt(borders[{j, i}].first)) p0 = borders[{j, i}].first;
-            if (dir * pvt(p1) < dir * pvt(borders[{j, i}].second)) p1 = borders[{j, i}].second;
-            borders[{i, j}] = borders[{j, i}] = {p0, p1};
-        }
+            auto p0 = m_borders[{i, j}].first, p1 = m_borders[{i, j}].second;
+            if (dir * pvt(p0) > dir * pvt(m_borders[{j, i}].first)) p0 = m_borders[{j, i}].first;
+            if (dir * pvt(p1) < dir * pvt(m_borders[{j, i}].second)) p1 = m_borders[{j, i}].second;
+            m_borders[{i, j}] = m_borders[{j, i}] = {p0, p1};
+        }*/
 }
 
 
@@ -385,7 +439,7 @@ void CoaptHeight::print_distribution(string directory, string name, int N){
     for (int j = 0; j < m_boundary_edges.size(); ++j){
         vector<double> distr = get_distribution(N, right_map[j]);
         double width = get_coapt_field_width(right_map[j]);
-        csv << right_map[j].first << " -> " << right_map[j].second << "; width = " << width << ", ";
+        csv << right_map[j].first + 1 << " -> " << right_map[j].second + 1 << "; width = " << width << ", ";
 //            cout << "borders: " << borders[i.first].first << ", " << borders[i.first].second << endl;
         for (auto& i: distr){
             csv << i << ", ";
@@ -452,10 +506,9 @@ void CoaptHeight::compute_boundary_edges(){
     }
 }
 
-double CoaptHeight::field_directed_diam(const pair<int, int>& id, const Line_2& line, const Vector_2& dir){
-    auto& pnts = projection[id];
+array<double, 2> CoaptHeight::_clever_field_directed_diam(const vector<Point_2>& pnts, const set<pair<int, int>>& edges, const Line_2& line, const Vector_2& dir){
     double mmin = 1e20, mmax = -1e20;
-    for (auto& i: m_boundary_edges[id]){
+    for (auto& i: edges){
         Segment_2  edge(pnts[i.first], pnts[i.second]);
         auto result = CGAL::intersection(line, edge);
         Point_2 p;
@@ -473,13 +526,22 @@ double CoaptHeight::field_directed_diam(const pair<int, int>& id, const Line_2& 
         mmin = min(mmin, res);
         mmax = max(mmax, res);
     }
-    double distance = mmax - mmin;
+    return {mmin, mmax};
+}
+
+double CoaptHeight::_field_directed_diam(const vector<Point_2>& pnts, const set<pair<int, int>>& edges, const Line_2& line, const Vector_2& dir){
+    auto diam = _clever_field_directed_diam(pnts, edges, line, dir);
+    double distance = diam[1] - diam[0];
     return (distance > 0) ? distance : 0;
+}
+
+double CoaptHeight::field_directed_diam(const pair<int, int>& id, const Line_2& line, const Vector_2& dir){
+    return _field_directed_diam(m_projection[id],  m_boundary_edges[id], line, dir);
 }
 
 double CoaptHeight::get_coapt_field_width(const pair<int, int>& id){
     computeCoaptationField();
-    auto _brds = borders[id];
+    auto _brds = m_borders[id];
     Vector_2 dir = proj_dir[id];
     Vector_2 dir_p(dir[1], -dir[0]);
     Vector_2 p[2] = {{_brds.first[0], _brds.first[1]}, {_brds.second[0], _brds.second[1]}};
@@ -487,17 +549,18 @@ double CoaptHeight::get_coapt_field_width(const pair<int, int>& id){
 }
 vector<double> CoaptHeight::get_distribution(int N, const pair<int, int>& id){
     computeCoaptationField();
-    Point_2 _p_min =  get_minmax_Point_set(projection[id], proj_dir[id]).first;
+    Point_2 _p_min =  get_minmax_Point_set(m_projection[id], proj_dir[id]).first;
     Vector_2 p_min(_p_min[0], _p_min[1]);
     Vector_2 dir = proj_dir[id];
     Vector_2 dir_p(dir[1], -dir[0]);
-    auto _brds = borders[id];
+    auto _brds = m_borders[id];
     Vector_2 p[2] = {{_brds.first[0], _brds.first[1]}, {_brds.second[0], _brds.second[1]}};
     vector<double> distribution;
     distribution.reserve(N+1);
     for (int i = 0; i < N+1; ++i){
         double cf = static_cast<double>(i) / N;
-        auto point = (p_min * dir) * dir + ((p[0] + (cf * (p[1] - p[0])))*dir_p)*dir_p;
+        const double eps = 1e-5;
+        auto point = (p_min * dir - eps) * dir + ((p[0] + (cf * (p[1] - p[0])))*dir_p)*dir_p;
         Point_2 l_p(point[0], point[1]);
         distribution.push_back(field_directed_diam(id, Line_2(l_p, dir), dir));
     }
@@ -930,4 +993,532 @@ void CoaptHeight::print_billowing(string directory, string name){
     printer(m_billow_plate, "billow plate: ", pnt2str);
     printer(m_billow_pnt, "billow pnts: ", pnt2str);
     printer(m_billowing, "billowing: ", default_to_str);
+}
+
+
+void CoaptHeight::print_distribution_per_leaf(string directory, string name, int N){
+    computeCoaptationField();
+    string fname = directory + name + ".csv";
+    ofstream csv(fname);
+    for (int j = 0; j < mesh.count; ++j){
+        stringstream ss1, ss2;
+        auto [distr, width] = get_distribution_per_leaf(N, j);
+        ss1 << j + 1 << "; width = " << width << " bottom, ";
+        ss2 << j + 1 << "; width = " << width << " top, ";
+        for (auto& i: distr){
+            double dist = i[1] - i[0];
+            if (dist <= 0){
+                ss1 << "-, ";
+                ss2 << "-, ";
+            }
+            else {
+                ss1 << i[0] << ", ";
+                ss2 << i[1] << ", ";
+            }
+        }
+        csv << ss1.str() << "\n" << ss2.str() << endl;
+    }
+}
+
+void CoaptHeight::compute_leaf_profiles(){
+    computeCoaptationField();
+    if (m_leaf_profiles_b) return;
+    for (int i = 0; i < mesh.count; ++i)
+        compute_plane_leaf_coaptation_profile(i);
+    m_leaf_profiles_b = true;
+}
+void CoaptHeight::compute_plane_leaf_coaptation_profile(int mesh_n){
+    vector<array<int, 3>> triags;
+
+    auto cn = common_nodes_with_connection(mesh_n);
+    auto [pnts1, link1, mapp1] = _get_connected_pnts(m_projection[remap[mesh_n][0]], m_edges[remap[mesh_n][0]]);
+    auto [pnts2, link2, mapp2] = _get_connected_pnts(m_projection[remap[mesh_n][1]], m_edges[remap[mesh_n][1]]);
+    pnts1 = align_to_dir(pnts1, proj_dir[remap[mesh_n][0]]);
+    pnts2 = align_to_dir(pnts2, proj_dir[remap[mesh_n][1]]);
+//        auto is_here = [](auto& link, auto& mapp){
+//            auto is_here_ = [&link = link, &mapp = mapp](pair<int, int> q){
+//                int dd[2] = {mapp[q.first], mapp[q.second]};
+//                if (dd[0] > dd[1]) swap(dd[0], dd[1]);
+//                return (link.count({dd[0], dd[1]}) > 0);
+//            };
+//            return is_here_;
+//        };
+//        string direct = "../Results/res1579026461/";
+//        string name;
+//        std::ofstream off_file;
+//        auto e_to_pnts_ids = [](auto& pnts){
+//            auto e_to_pnts1 = [&pnts = pnts](auto& e){
+//                array<point_t, 3> arr;
+//                for (int i = 0; i < 3; ++i)
+//                    arr[i] = VEC(pnts[e[i]][0], pnts[e[i]][1], 0);
+//                return arr;
+//            };
+//            return e_to_pnts1;
+//        };
+
+    map<int, int> common;
+    for (auto& i: cn){
+        common.insert({mapp1[i->contact_elem_id[0]], mapp2[i->contact_elem_id[1]]});
+    }
+    auto shift = pnts2[(common.begin())->second] - pnts1[(common.begin())->first];
+    for(auto& i: pnts2){
+        i = i - shift;
+    }
+
+    auto p2ar = [](Point_2 p) { return array<double, 2>({p[0], p[1]}); };
+    auto n2ar = [&pp = pnts1](pair<int, int> id) {
+        Point_2& p = pp[id.first];
+        return array<double, 2>({p[0], p[1]});
+    };
+    auto n2ar2 = [&pp = pnts2](pair<int, int> id) {
+        Point_2& p = pp[id.second];
+        return array<double, 2>({p[0], p[1]});
+    };
+//        off_file.open(direct + "test1.off");
+//        _savetoOFF(off_file, pnts1, p2ar);
+//        off_file.close();
+//        off_file.open(direct + "test2.off");
+//        _savetoOFF(off_file, pnts2, p2ar);
+//        off_file.close();
+//        off_file.open(direct + "test3.off");
+//        _savetoOFF(off_file, common, n2ar);
+//        off_file.close();
+//        off_file.open(direct + "test4.off");
+//        _savetoOFF(off_file, common, n2ar2);
+//        off_file.close();
+
+//        off_file.open(direct + "test1.stl");
+//        auto node_conv1 = [](node_t* n) {if (!n->contact_elem_id) return -1; return n->contact_elem_id[0]; };
+//        triags = convert_edges_to_elems(node_conv1, is_here(link1, mapp1), mesh_n);
+//        _savetoSTL(off_file, triags, e_to_pnts_ids(pnts1));
+//        off_file.close();
+//
+//        auto node_conv2 = [](node_t* n) {if (!n->contact_elem_id) return -1; return n->contact_elem_id[1]; };
+//        off_file.open(direct + "test2.stl");
+//        triags = convert_edges_to_elems(node_conv2, is_here(link2, mapp2), mesh_n);
+//        _savetoSTL(off_file, triags, e_to_pnts_ids(pnts2));
+//        off_file.close();
+
+
+    SewTwoFields sw(pnts1, link1, pnts2, link2, common);
+    sw.find_minimum_energy_df(-1, 1.e-4, 1.e-2, 5.e-1, 2000, 2);
+
+//        off_file.open(direct + "test11.stl");
+//        auto node_conv11 = [](node_t* n) {if (!n->contact_elem_id) return -1; return n->contact_elem_id[0]; };
+//        triags = convert_edges_to_elems(node_conv11, is_here(link1, mapp1), mesh_n);
+//        _savetoSTL(off_file, triags, e_to_pnts_ids(pnts1));
+//        off_file.close();
+//
+//        auto node_conv21 = [](node_t* n) {if (!n->contact_elem_id) return -1; return n->contact_elem_id[1]; };
+//        off_file.open(direct + "test21.stl");
+//        triags = convert_edges_to_elems(node_conv21, is_here(link2, mapp2), mesh_n);
+//        _savetoSTL(off_file, triags, e_to_pnts_ids(pnts2));
+//        off_file.close();
+
+    auto invmap = [](map<int, int> m){
+        map<int, int> res;
+        for (const auto& i: m)
+            res.insert({i.second, i.first});
+        return res;
+    };
+    auto brd1 = get_minmax_Point_set(pnts1, Vector_2(1, 0));
+    auto brd2 = get_minmax_Point_set(pnts2, Vector_2(1, 0));
+    if (brd1.first[1] > brd2.first[1]){
+        auto inv = [](vector<Point_2>& pp){
+            for (auto& i: pp)
+                i = Point_2(i[0], -i[1]);
+        };
+        inv(pnts1);
+        inv(pnts2);
+    }
+    map<int, int> gmap;
+    set<pair<int, int>> links;
+    auto invmap1 = invmap(mapp1), invmap2 = invmap(mapp2);
+    auto invcommon = invmap(common);
+    auto& nodes1 = m_nodes[remap[mesh_n][0]], nodes2 = m_nodes[remap[mesh_n][1]];
+    set<int> exclude;
+    for (const auto& i: common)
+        exclude.insert(i.second);
+    vector<Point_2> res;
+    res.reserve(pnts1.size() + pnts2.size() - cn.size());
+    int off = 0;
+    for (int i = 0; i < pnts1.size(); ++i) {
+        res.push_back(pnts1[i]);
+        gmap.insert({off++, nodes1[invmap1[i]]->id});
+    }
+    for (auto& i: link1){
+        array<int, 2> temp = {i.first, i.second};
+        if (temp[0] > temp[1]) swap(temp[0], temp[1]);
+        links.insert({temp[0], temp[1]});
+    }
+    map<int, int> loc_ids2;
+    for (int i = 0; i < pnts2.size(); ++i){
+        if (!exclude.count(i)) {
+            res.push_back(pnts2[i]);
+            gmap.insert({off++, nodes2[invmap2[i]]->id});
+            loc_ids2.insert({i, off-1});
+        }
+        else loc_ids2.insert({i, invcommon[i]});
+    }
+    for (auto& i: link2){
+        array<int, 2> temp = {loc_ids2[i.first], loc_ids2[i.second]};
+        if (temp[0] > temp[1]) swap(temp[0], temp[1]);
+        links.insert({temp[0], temp[1]});
+    }
+
+    set<pair<int, int>> boundary_links;
+    for (const auto& i: m_boundary_edges[remap[mesh_n][0]]){
+        array<int, 2> temp = {(int)nodes1[i.first]->id, (int)nodes1[i.second]->id};
+        if (temp[0] > temp[1]) swap(temp[0], temp[1]);
+        if (links.count({temp[0], temp[1]}))
+            boundary_links.insert({temp[0], temp[1]});
+    }
+    for (const auto& i: m_boundary_edges[remap[mesh_n][1]]){
+        array<int, 2> temp = {(int)nodes2[i.first]->id, (int)nodes2[i.second]->id};
+        if (temp[0] > temp[1]) swap(temp[0], temp[1]);
+        if (links.count({temp[0], temp[1]}))
+            boundary_links.insert({temp[0], temp[1]});
+    }
+
+//        off_file.open(direct + "test11.off");
+//        _savetoOFF(off_file, pnts1, p2ar);
+//        off_file.close();
+//        off_file.open(direct + "test21.off");
+//        _savetoOFF(off_file, pnts2, p2ar);
+//        off_file.close();
+//        off_file.open(direct + "test31.off");
+//        _savetoOFF(off_file, common, n2ar);
+//        off_file.close();
+//        off_file.open(direct + "test41.off");
+//        _savetoOFF(off_file, common, n2ar2);
+//        off_file.close();
+//        off_file.open(direct + "test_full1.off");
+//        _savetoOFF(off_file, res, p2ar);
+//        off_file.close();
+
+
+//        auto check_link = [&links = links, inmp = invmap(gmap)](pair<int, int> q) mutable {
+//            int tmp[2] = {inmp[q.first], inmp[q.second]};
+//            if (tmp[0] > tmp[1]) swap(tmp[0], tmp[1]);
+//            return (links.count({tmp[0], tmp[1]}) > 0);
+//        };
+//        off_file.open(direct + "test_full1.stl");
+//        auto nconv1 = [](node_t* n) {return n->id;};
+//        auto inmp = invmap(gmap);
+//        auto e_to_pnts3 = [&pnts = res, &inmp = inmp](auto& e){
+//            array<point_t, 3> arr;
+//            for (int i = 0; i < 3; ++i)
+//                arr[i] = VEC(pnts[inmp[e[i]]][0], pnts[inmp[e[i]]][1], 0);
+//            return arr;
+//        };
+//        triags = convert_edges_to_elems(nconv1, check_link, mesh_n);
+//        _savetoSTL(off_file, triags, e_to_pnts3);
+//        off_file.close();
+
+
+    m_leaflet_coapt_fields.insert({mesh_n, {move(res), move(links), move(gmap), move(boundary_links)}});
+}
+
+set<node_t*> CoaptHeight::common_nodes(int mesh_n){
+    int i = mesh_n;
+    set<node_t*> common;
+    if (mesh.count < 3) {
+        common = colData[{i, (i + 1) % 2}];
+        return common;
+    }
+    auto& d1 = colData[remap[i][0]], &d2 = colData[remap[i][1]];
+    set_intersection(d1.begin(), d1.end(), d2.begin(), d2.end(), inserter(common, common.begin()));
+    return common;
+}
+set<spring_t*> CoaptHeight::common_edges(int mesh_n){
+    set<spring_t*> common;
+    auto cn = common_nodes(mesh_n);
+    for (int i = 0, cnt = mesh.nets[mesh_n].springs.count; i < cnt; ++i){
+        spring_t* spr = mesh.nets[mesh_n].springs.springs[i];
+        if (cn.count(spr->ends[0]) && cn.count(spr->ends[1]))
+            common.insert(spr);
+    }
+}
+set<node_t*> CoaptHeight::common_nodes_with_connection(int mesh_n){
+    auto cn = common_nodes(mesh_n);
+    auto &ed1 = m_edges[remap[mesh_n][0]],
+            &ed2 = m_edges[remap[mesh_n][1]];
+    auto connectivity = [](set<pair<int, int>> s){
+        set<int> res;
+        for (auto& i: s){
+            res.insert(i.first);
+            res.insert(i.second);
+        }
+        return res;
+    };
+    auto ced1 = connectivity(ed1), ced2 = connectivity(ed2);
+    for (auto it = cn.begin(); it != cn.end(); ){
+        int i1 = (*it)->contact_elem_id[0], i2 = (*it)->contact_elem_id[1];
+        if (!ced1.count(i1) || !ced2.count(i2)){
+            it = cn.erase(it);
+        }
+        else
+            ++it;
+    }
+    return cn;
+}
+vector<CoaptHeight::Point_2> CoaptHeight::align_to_dir(const vector<Point_2>& pnts, const Vector_2& dir){
+    vector<Point_2> aligned;
+    aligned.reserve(pnts.size());
+    Vector_2 ort(dir[1], -dir[0]);
+    for (auto& i: pnts){
+        auto v = i - pnts[0];
+        aligned.push_back(Point_2(CGAL::scalar_product(ort, v), CGAL::scalar_product(dir, v)));
+    }
+    return aligned;
+}
+vector<CoaptHeight::Point_2> CoaptHeight::dealign_from_dir(const vector<Point_2>& aligned, const Vector_2& dir) {
+    vector<Point_2> pnts;
+    Point_2 z(0, 0);
+    pnts.reserve(aligned.size());
+    Vector_2 ort(dir[1], -dir[0]);
+    for (auto& i: aligned){
+        pnts.push_back(z + i[0] * ort + i[1] * dir);
+    }
+    return pnts;
+}
+
+void CoaptHeight::SewTwoFields::set_data(gsl_vector *x){
+    array<int, 4> off;
+    off[0] = 0;
+    off[1] = off[0] + m_p1.size() - m_cn.size();
+    off[2] = off[1] + m_cn.size();
+    off[3] = off[2] + m_p2.size() - m_cn.size();
+    set<int> overlap1, overlap2;
+    for (const auto& i: m_cn){
+        overlap1.insert(i.first);
+        overlap2.insert(i.second);
+    }
+    int id = 0;
+    for (int i = 0; i < m_p1.size(); ++i){
+        if (overlap1.count(i)) continue;
+        m_map1.insert({i, id / 2});
+        gsl_vector_set(x, id++, m_p1[i][0]);
+        gsl_vector_set(x, id++, m_p1[i][1]);
+    }
+    for (auto i: overlap1){
+        m_map1.insert({i, id / 2});
+        m_map2.insert({m_cn[i], id / 2});
+        gsl_vector_set(x, id++, m_p1[i][0]);
+        gsl_vector_set(x, id++, m_p1[i][1]);
+    }
+    for (int i = 0; i < m_p2.size(); ++i){
+        if (overlap2.count(i)) continue;
+        m_map2.insert({i, id / 2});
+        gsl_vector_set(x, id++, m_p2[i][0]);
+        gsl_vector_set(x, id++, m_p2[i][1]);
+    }
+}
+
+void CoaptHeight::SewTwoFields::set_new_points(gsl_vector* x){
+    for(int i = 0, cnt = m_p1.size(); i < cnt; ++i) {
+        int j = m_map1[i];
+        m_p1[i] = Point_2(gsl_vector_get(x, 2 * j), gsl_vector_get(x, 2 * j + 1));
+    }
+    for(int i = 0, cnt = m_p2.size(); i < cnt; ++i) {
+        int j = m_map2[i];
+        m_p2[i] = Point_2(gsl_vector_get(x, 2 * j), gsl_vector_get(x, 2 * j + 1));
+    }
+}
+
+double CoaptHeight::SewTwoFields::compute(const gsl_vector *x){
+    double f = 0;
+    auto adder = [&f = f, &m_wy = m_wy, &x = x](auto& container, auto& from, auto& _conv) {
+        for (const auto &i: container) {
+            double cur[4] = {from[i.first][0], from[i.first][1], from[i.second][0], from[i.second][1]};
+            int idd[2] = {2*_conv[i.first],2*_conv[i.second]};
+            double next[4] = {gsl_vector_get(x, idd[0]), gsl_vector_get(x, idd[0] + 1),
+                              gsl_vector_get(x, idd[1]), gsl_vector_get(x, idd[1] + 1)};
+            double weights[] = {1, m_wy};
+            for (int k = 0; k < 2; ++k) {
+                double loc = next[k] - next[k + 2] - (cur[k] - cur[k + 2]);
+                f += loc * loc * weights[k];
+                //cout << loc * loc * weights[k] << " ";
+            }
+        }
+    };
+    adder(m_l1, m_p1, m_map1);
+    adder(m_l2, m_p2, m_map2);
+    return f;
+}
+
+void CoaptHeight::SewTwoFields::compute_df(const gsl_vector *x, gsl_vector *df){
+    auto adder = [&](auto& container, auto& from, auto& conv) {
+        for (const auto &i: container) {
+            int ids[2] = {i.first, i.second};
+            int idd[2] = {2*conv[i.first], 2*conv[i.second]};
+            double cur[4] = {from[i.first][0], from[i.first][1], from[i.second][0], from[i.second][1]};
+            double next[4] = {gsl_vector_get(x, idd[0]), gsl_vector_get(x, idd[0] + 1),
+                              gsl_vector_get(x, idd[1]), gsl_vector_get(x, idd[1] + 1)};
+            double weights[] = {1, m_wy};
+            for (int k = 0; k < 2; ++k) {
+                double loc = next[k] - next[k + 2] - (cur[k] - cur[k + 2]);
+                double ins = loc * weights[k];
+                gsl_vector_set(df, idd[0] + k ,gsl_vector_get(df, idd[0] + k) + ins);
+                gsl_vector_set(df, idd[1] + k,gsl_vector_get(df, idd[1] + k) - ins);
+            }
+        }
+    };
+    adder(m_l1, m_p1, m_map1);
+    adder(m_l2, m_p2, m_map2);
+}
+
+double CoaptHeight::SewTwoFields::compute_fdf(const gsl_vector *x, gsl_vector *df){
+    double f = 0;
+    auto adder = [&](auto& container, auto& from, auto& conv) {
+        for (const auto &i: container) {
+            int ids[2] = {i.first, i.second};
+            int idd[2] = {2*conv[i.first], 2*conv[i.second]};
+            double cur[4] = {from[i.first][0], from[i.first][1], from[i.second][0], from[i.second][1]};
+            double next[4] = {gsl_vector_get(x, idd[0]), gsl_vector_get(x, idd[0] + 1),
+                              gsl_vector_get(x, idd[1]), gsl_vector_get(x, idd[1] + 1)};
+            double weights[] = {1, m_wy};
+            for (int k = 0; k < 2; ++k) {
+                double loc = next[k] - next[k + 2] - (cur[k] - cur[k + 2]);
+                double ins = loc * weights[k];
+                f += ins * loc;
+                gsl_vector_set(df, idd[0] + k ,gsl_vector_get(df, idd[0] + k) + ins);
+                gsl_vector_set(df, idd[1] + k,gsl_vector_get(df, idd[1] + k) - ins);
+            }
+        }
+    };
+    adder(m_l1, m_p1, m_map1);
+    adder(m_l2, m_p2, m_map2);
+    return f;
+}
+
+void CoaptHeight::SewTwoFields::_fdf4gsl(const gsl_vector *x, void *params, double *f, gsl_vector *df)
+{
+    gsl_vector_set_all(df, 0);
+    SewTwoFields* m = (SewTwoFields*)params;
+    *f = m->compute_fdf(x, df);
+}
+double CoaptHeight::SewTwoFields::_f4gsl (const gsl_vector *x, void *params)
+{
+    SewTwoFields* m = (SewTwoFields*)params;
+
+    return m->compute(x);
+}
+void CoaptHeight::SewTwoFields::_df4gsl (const gsl_vector *x, void *params, gsl_vector *df)
+{
+    gsl_vector_set_all(df, 0);
+    SewTwoFields* m = (SewTwoFields*)params;
+    m->compute_df(x, df);
+}
+
+int CoaptHeight::SewTwoFields::find_minimum_energy_df(int freq, double step_sz, double tol, double epsabs, int maxits, double time){
+    class _Timer
+    {
+    private:
+        using clock_t = std::chrono::high_resolution_clock;
+        using second_t = std::chrono::duration<double, std::ratio<1> >;
+        std::chrono::time_point<clock_t> m_beg;
+    public:
+        _Timer() : m_beg(clock_t::now()){}
+        void reset() { m_beg = clock_t::now(); }
+
+        double elapsed() const
+        {
+            return std::chrono::duration_cast<second_t>(clock_t::now() - m_beg).count();
+        }
+    };
+
+    size_t iter = 0;
+    int status;
+
+    const gsl_multimin_fdfminimizer_type *T;
+    gsl_multimin_fdfminimizer *s;
+
+    void* par = this;
+
+    int g_N = (m_p1.size() + m_p2.size() - m_cn.size()) * 2;
+    gsl_vector *x = gsl_vector_alloc (g_N);
+    set_data(x);
+
+    gsl_multimin_function_fdf my_func;
+
+    my_func.n = g_N;
+    my_func.f = _f4gsl;
+    my_func.df = _df4gsl;
+    my_func.fdf = _fdf4gsl;
+    my_func.params = par;
+
+    T = gsl_multimin_fdfminimizer_conjugate_fr;
+    s = gsl_multimin_fdfminimizer_alloc (T, g_N);
+
+    gsl_multimin_fdfminimizer_set (s, &my_func, x, step_sz, tol);
+
+    _Timer t;
+    do
+    {
+        iter++;
+        status = gsl_multimin_fdfminimizer_iterate (s);
+
+        if (status)
+            break;
+
+        status = gsl_multimin_test_gradient (s->gradient, epsabs);
+
+        if (status == GSL_SUCCESS && freq >= 0)
+            printf ("Minimum found at: %5lu: f() = %10.5f\n", iter, s->f);
+
+        if ((freq > 0) && !(iter % freq))
+            printf ("%5lu: f() = %10.5f\n", iter, s->f);
+
+    }
+    while (status == GSL_CONTINUE && iter < maxits && t.elapsed() < time);
+    if (status != GSL_SUCCESS && freq >= 0)
+        printf ("Success didn't reached status = %d: %5lu: f() = %10.5f\n", status, iter, s->f);
+
+    set_new_points(s->x);
+
+    gsl_multimin_fdfminimizer_free (s);
+    gsl_vector_free (x);
+
+    return status;
+}
+
+tuple<vector<CoaptHeight::Point_2>, set<pair<int, int>>, map<int, int>> CoaptHeight::_get_connected_pnts(const vector<Point_2>& pnts, const set<pair<int, int>>& connect){
+    set<int> use_ids;
+    for (const auto& i: connect)
+        use_ids.insert(i.first), use_ids.insert(i.second);
+    vector<Point_2> use_pnts;
+    use_pnts.reserve(use_ids.size());
+    map<int, int> to_new_ids;
+    int counter = 0;
+    for (auto i: use_ids) {
+        use_pnts.push_back(pnts[i]);
+        to_new_ids.insert({i, counter});
+        counter++;
+    }
+    set<pair<int, int>> new_connect;
+    for (auto& i: connect){
+        new_connect.insert({to_new_ids[i.first], to_new_ids[i.second]});
+    }
+    return tuple(use_pnts, new_connect, to_new_ids);
+
+}
+pair<vector<array<double, 2>>, double> CoaptHeight::get_distribution_per_leaf(int N, int mesh_n){
+    compute_leaf_profiles();
+    auto& [pnts, links, gmap, borders] = m_leaflet_coapt_fields[mesh_n];
+    Vector_2 dir(0, 1), ort(1, 0);
+    const double eps = 1e-5;
+    double from =  get_minmax_Point_set(pnts, dir).first[1] - eps;
+    auto _pp = get_minmax_Point_set(pnts, ort);
+    double pp[2] = {_pp.first[0], _pp.second[0]};
+    vector<array<double, 2>> distribution;
+    distribution.reserve(N+1);
+    for (int i = 0; i < N+1; ++i){
+        double cf = static_cast<double>(i) / N;
+        auto point = from * dir + (pp[0] + cf * (pp[1] - pp[0]))*ort;
+        Point_2 l_p(point[0], point[1]);
+        auto diam = _clever_field_directed_diam(pnts, links, Line_2(l_p, dir), dir);
+        distribution.push_back({diam[0] - from, diam[1] - from});
+    }
+    return pair(move(distribution), pp[1] - pp[0]);
 }
