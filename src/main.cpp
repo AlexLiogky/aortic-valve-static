@@ -746,7 +746,7 @@ int main(int argc, char* argv[]){
 //    return 0;
 
     gPrms.InputProcessorInit(argc, argv);
-    //return testMeassure(gPrms);
+    return testMeassure(gPrms);
     if (!gPrms.ro.use) gLog.set_activation(false);
         gLog.open(gPrms.ro.log_name, ios::trunc);
         gLog << to_string(gPrms);
